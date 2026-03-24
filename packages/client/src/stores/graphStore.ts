@@ -4,7 +4,6 @@ import type { Node, Edge } from "@rome/shared";
 interface Filters {
   status: string | null;
   workstream: string | null;
-  responsible: string | null;
 }
 
 interface GraphState {
@@ -12,6 +11,7 @@ interface GraphState {
   edges: Edge[];
   selectedNode: Node | null;
   filters: Filters;
+  collapsed: Set<string>;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
   selectNode: (node: Node | null) => void;
@@ -21,13 +21,15 @@ interface GraphState {
   addEdge: (edge: Edge) => void;
   removeEdge: (id: string) => void;
   setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
+  toggleCollapsed: (id: string) => void;
 }
 
 export const useGraphStore = create<GraphState>((set) => ({
   nodes: [],
   edges: [],
   selectedNode: null,
-  filters: { status: null, workstream: null, responsible: null },
+  filters: { status: null, workstream: null },
+  collapsed: new Set<string>(),
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -60,4 +62,12 @@ export const useGraphStore = create<GraphState>((set) => ({
 
   setFilter: (key, value) =>
     set((state) => ({ filters: { ...state.filters, [key]: value } })),
+
+  toggleCollapsed: (id) =>
+    set((state) => {
+      const next = new Set(state.collapsed);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { collapsed: next };
+    }),
 }));

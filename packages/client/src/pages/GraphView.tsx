@@ -177,7 +177,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const storeEdges = useGraphStore((s) => s.edges);
   const selectNode = useGraphStore((s) => s.selectNode);
   const filters = useGraphStore((s) => s.filters);
-  const hasActiveFilter = filters.status || filters.workstream || filters.responsible;
+  const hasActiveFilter = filters.status || filters.workstream;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 

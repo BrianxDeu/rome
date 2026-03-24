@@ -1,6 +1,6 @@
 import { useAuthStore } from "../stores/authStore";
 
-export type ViewTab = "graph" | "gantt" | "budget";
+export type ViewTab = "graph" | "board" | "gantt" | "budget";
 
 interface TopBarProps {
   activeView: ViewTab;
@@ -9,6 +9,7 @@ interface TopBarProps {
 
 const tabs: { id: ViewTab; label: string }[] = [
   { id: "graph", label: "Graph" },
+  { id: "board", label: "Board" },
   { id: "gantt", label: "Gantt" },
   { id: "budget", label: "Budget" },
 ];

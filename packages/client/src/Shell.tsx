@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
 import { NodePanel } from "./components/NodePanel";
+import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
 import { GraphView } from "./pages/GraphView";
@@ -29,14 +30,16 @@ export function Shell() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar activeView={activeView} onViewChange={setActiveView} />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {activeView === "budget" ? (
+        {activeView === "board" ? (
+          <BoardView onNavigateToNode={handleNavigateToNode} />
+        ) : activeView === "budget" ? (
           <BudgetView onNavigateToNode={handleNavigateToNode} />
         ) : activeView === "gantt" ? (
           <GanttView onNavigateToNode={handleNavigateToNode} />
         ) : (
           <GraphView onNavigateToNode={handleNavigateToNode} />
         )}
-        {selectedNode && <NodePanel />}
+        {selectedNode && activeView !== "board" && <NodePanel />}
       </div>
     </div>
   );

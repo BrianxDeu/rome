@@ -5,10 +5,12 @@ import { edges, nodes } from "@rome/shared/schema";
 import type { Db } from "../db.js";
 import { broadcast } from "../socket.js";
 
+const DEPENDENCY_TYPES = new Set(["blocks", "blocker", "depends_on", "sequence"]);
+
 const createSchema = z.object({
   source_id: z.string(),
   target_id: z.string(),
-  type: z.enum(["blocks", "parent_of"]),
+  type: z.enum(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared", "parent_of"]),
 });
 
 function toEdgeJson(edge: {
@@ -44,8 +46,9 @@ function wouldCreateCycle(db: Db, sourceId: string, targetId: string): boolean {
     const outgoing = db
       .select()
       .from(edges)
-      .where(and(eq(edges.sourceId, current), eq(edges.type, "blocks")))
-      .all();
+      .where(eq(edges.sourceId, current))
+      .all()
+      .filter((e) => DEPENDENCY_TYPES.has(e.type));
 
     for (const edge of outgoing) {
       stack.push(edge.targetId);
@@ -79,7 +82,7 @@ export function edgeRoutes(db: Db): Router {
       return;
     }
 
-    if (type === "blocks") {
+    if (DEPENDENCY_TYPES.has(type)) {
       if (wouldCreateCycle(db, source_id, target_id)) {
         res.status(422).json({ error: "Edge would create a cycle", code: "CYCLE_DETECTED" });
         return;
