@@ -3,7 +3,21 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "bin": {
+    "rome": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
   "dependencies": {
-    "@rome/shared": "*"
+    "@rome/shared": "*",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }
