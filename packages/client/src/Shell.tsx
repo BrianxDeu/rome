@@ -10,7 +10,7 @@ import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
 
 export function Shell() {
-  const [activeView, setActiveView] = useState<ViewTab>("graph");
+  const [activeView, setActiveView] = useState<ViewTab>("board");
   const selectedNode = useGraphStore((s) => s.selectedNode);
   const nodes = useGraphStore((s) => s.nodes);
   const selectNode = useGraphStore((s) => s.selectNode);

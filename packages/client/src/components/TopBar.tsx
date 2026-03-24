@@ -8,8 +8,8 @@ interface TopBarProps {
 }
 
 const tabs: { id: ViewTab; label: string }[] = [
-  { id: "graph", label: "Graph" },
   { id: "board", label: "Board" },
+  { id: "graph", label: "Graph" },
   { id: "gantt", label: "Gantt" },
   { id: "budget", label: "Budget" },
 ];
