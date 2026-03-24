@@ -5,6 +5,7 @@ import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
 import { GraphView } from "./pages/GraphView";
 import { useSync } from "./hooks/useSync";
+import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
 
 export function Shell() {
@@ -12,6 +13,7 @@ export function Shell() {
   const selectedNode = useGraphStore((s) => s.selectedNode);
   const nodes = useGraphStore((s) => s.nodes);
   const selectNode = useGraphStore((s) => s.selectNode);
+  useGraph();
   useSync();
 
   const handleNavigateToNode = useCallback(
