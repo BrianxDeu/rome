@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
 import { NodePanel } from "./components/NodePanel";
 import { BudgetView } from "./pages/BudgetView";
+import { GanttView } from "./pages/GanttView";
 import { useSync } from "./hooks/useSync";
 import { useGraphStore } from "./stores/graphStore";
 
@@ -27,11 +28,12 @@ export function Shell() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {activeView === "budget" ? (
           <BudgetView onNavigateToNode={handleNavigateToNode} />
+        ) : activeView === "gantt" ? (
+          <GanttView onNavigateToNode={handleNavigateToNode} />
         ) : (
           <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <p style={{ color: "var(--rome-text-muted)" }}>
-              {activeView === "graph" && "Graph view — coming soon"}
-              {activeView === "gantt" && "Gantt view — coming soon"}
+              Graph view — coming soon
             </p>
           </main>
         )}
