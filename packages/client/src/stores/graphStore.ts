@@ -22,6 +22,7 @@ interface GraphState {
   removeEdge: (id: string) => void;
   setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
   toggleCollapsed: (id: string) => void;
+  collapseAll: (ids: string[]) => void;
 }
 
 export const useGraphStore = create<GraphState>((set) => ({
@@ -70,4 +71,7 @@ export const useGraphStore = create<GraphState>((set) => ({
       else next.add(id);
       return { collapsed: next };
     }),
+
+  collapseAll: (ids) =>
+    set({ collapsed: new Set(ids) }),
 }));

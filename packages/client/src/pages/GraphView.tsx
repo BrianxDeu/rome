@@ -158,6 +158,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const filters = useGraphStore((s) => s.filters);
   const collapsed = useGraphStore((s) => s.collapsed);
   const toggleCollapsed = useGraphStore((s) => s.toggleCollapsed);
+  const collapseAll = useGraphStore((s) => s.collapseAll);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
@@ -166,12 +167,20 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const [hasFitView, setHasFitView] = useState(false);
+  const hasInitCollapsed = useRef(false);
 
   // Derived cluster maps
   const { parentMap, childrenMap } = useMemo(
     () => buildClusterMaps(storeEdges),
     [storeEdges],
   );
+
+  // Collapse all clusters by default on initial load
+  useEffect(() => {
+    if (hasInitCollapsed.current || childrenMap.size === 0) return;
+    hasInitCollapsed.current = true;
+    collapseAll([...childrenMap.keys()]);
+  }, [childrenMap, collapseAll]);
 
   // All unique workstreams
   const allWorkstreams = useMemo(
