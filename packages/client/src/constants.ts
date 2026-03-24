@@ -89,7 +89,13 @@ export function parseRaci(raci: string | null): {
     // Handle double-escaped JSON bug
     if (str.startsWith('"') && str.endsWith('"')) str = JSON.parse(str);
     const parsed = typeof str === "string" ? JSON.parse(str) : str;
-    return { ...empty, ...parsed };
+    // Handle both short keys (R/A/C/I) and full keys (responsible/accountable/consulted/informed)
+    return {
+      responsible: parsed.responsible ?? parsed.R ?? "",
+      accountable: parsed.accountable ?? parsed.A ?? "",
+      consulted: parsed.consulted ?? parsed.C ?? "",
+      informed: parsed.informed ?? parsed.I ?? "",
+    };
   } catch {
     return empty;
   }
