@@ -77,8 +77,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
   },
   tabActive: {
-    background: "var(--rome-surface-hover)",
-    color: "var(--rome-text)",
+    background: "var(--rome-red)",
+    color: "#FFFFFF",
   },
   user: {
     display: "flex",

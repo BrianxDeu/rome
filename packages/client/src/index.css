@@ -1,12 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Tomorrow:wght@400;500;600;700&display=swap');
+
 :root {
   --rome-red: #B81917;
   --rome-red-hover: #9e1514;
-  --rome-bg: #0f0f0f;
-  --rome-surface: #1a1a1a;
-  --rome-surface-hover: #252525;
-  --rome-border: #333;
-  --rome-text: #e0e0e0;
-  --rome-text-muted: #888;
+  --rome-bg: #FFFFFF;
+  --rome-surface: #F8F8F8;
+  --rome-surface-hover: #F0F0F0;
+  --rome-border: #E0E0E0;
+  --rome-text: #1A1A1A;
+  --rome-text-muted: #414042;
   --font-family: "Tomorrow", system-ui, sans-serif;
 }
 

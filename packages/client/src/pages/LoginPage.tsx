@@ -124,7 +124,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   input: {
     padding: "10px 12px",
-    background: "var(--rome-bg)",
+    background: "#FFFFFF",
     border: "1px solid var(--rome-border)",
     borderRadius: "4px",
     color: "var(--rome-text)",

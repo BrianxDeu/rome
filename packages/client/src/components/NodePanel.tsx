@@ -73,10 +73,11 @@ export function NodePanel() {
           value={selectedNode.status}
           onChange={(e) => handleChange("status", e.target.value)}
         >
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
+          <option value="not_started">Not Started</option>
+          <option value="in_progress">In Progress</option>
           <option value="blocked">Blocked</option>
-          <option value="deferred">Deferred</option>
+          <option value="done">Done</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </label>
 
