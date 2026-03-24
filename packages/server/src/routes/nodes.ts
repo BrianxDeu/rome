@@ -102,12 +102,12 @@ export function nodeRoutes(db: Db): Router {
         budget: data.budget ?? null,
         deliverable: data.deliverable ?? null,
         notes: data.notes ?? null,
-        raci: data.raci ? JSON.stringify(data.raci) : null,
+        raci: data.raci ? (typeof data.raci === "string" ? data.raci : JSON.stringify(data.raci)) : null,
         workstream: data.workstream ?? null,
         x: data.x ?? null,
         y: data.y ?? null,
         positionPinned: data.position_pinned ? 1 : 0,
-        attachments: data.attachments ? JSON.stringify(data.attachments) : null,
+        attachments: data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null,
         createdBy: req.auth!.userId,
         createdAt: now,
         updatedAt: now,
@@ -143,12 +143,12 @@ export function nodeRoutes(db: Db): Router {
     if (data.budget !== undefined) changes.budget = data.budget;
     if (data.deliverable !== undefined) changes.deliverable = data.deliverable;
     if (data.notes !== undefined) changes.notes = data.notes;
-    if (data.raci !== undefined) changes.raci = data.raci ? JSON.stringify(data.raci) : null;
+    if (data.raci !== undefined) changes.raci = data.raci ? (typeof data.raci === "string" ? data.raci : JSON.stringify(data.raci)) : null;
     if (data.workstream !== undefined) changes.workstream = data.workstream;
     if (data.x !== undefined) changes.x = data.x;
     if (data.y !== undefined) changes.y = data.y;
     if (data.position_pinned !== undefined) changes.positionPinned = data.position_pinned ? 1 : 0;
-    if (data.attachments !== undefined) changes.attachments = data.attachments ? JSON.stringify(data.attachments) : null;
+    if (data.attachments !== undefined) changes.attachments = data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null;
 
     db.update(nodes).set(changes).where(eq(nodes.id, req.params.id!)).run();
     const updated = db.select().from(nodes).where(eq(nodes.id, req.params.id!)).get();
