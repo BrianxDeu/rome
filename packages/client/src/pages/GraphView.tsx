@@ -383,7 +383,8 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
       // Only pan if clicking on SVG background (not a node/cluster)
-      if ((e.target as Element).tagName === "svg" || (e.target as Element).classList.contains("graph-bg")) {
+      const tag = (e.target as Element).tagName.toLowerCase();
+      if (tag === "svg" || tag === "rect") {
         setIsPanning(true);
         panStart.current = { x: e.clientX, y: e.clientY, vpX: vp.x, vpY: vp.y };
         selectNode(null);
@@ -589,12 +590,14 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             </marker>
           </defs>
 
-          {/* Clickable background rect */}
+          {/* Background — pointer-events:none so clicks fall through to nodes.
+              Pan is handled by onMouseDown on the SVG element itself. */}
           <rect
             className="graph-bg"
             width="100%"
             height="100%"
-            fill="transparent"
+            fill="white"
+            style={{ pointerEvents: "none" }}
           />
 
           <g
