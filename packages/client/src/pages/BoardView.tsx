@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useGraphStore } from "../stores/graphStore";
 import { api } from "../api";
 import type { Node, Edge } from "@rome/shared";
@@ -21,6 +21,12 @@ interface BoardViewProps {
   onAddNode?: (defaultWorkstream?: string, defaultClusterId?: string) => void;
 }
 
+interface DragState {
+  nodeId: string;
+  sourceWorkstream: string;
+  sourceClusterId?: string;
+}
+
 export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
@@ -28,11 +34,17 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const removeNode = useGraphStore((s) => s.removeNode);
   const addNode = useGraphStore((s) => s.addNode);
   const addEdge = useGraphStore((s) => s.addEdge);
+  const removeEdge = useGraphStore((s) => s.removeEdge);
 
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [addingIn, setAddingIn] = useState<string | null>(null);
   const [addLabel, setAddLabel] = useState("");
+
+  // Drag-and-drop state
+  const dragRef = useRef<DragState | null>(null);
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null); // section key of drop zone
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
 
@@ -58,6 +70,90 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       return next;
     });
   }, []);
+
+  // --- Drag-and-drop handlers ---
+
+  function handleDragStart(e: React.DragEvent, node: Node, clusterId?: string) {
+    dragRef.current = {
+      nodeId: node.id,
+      sourceWorkstream: node.workstream ?? "",
+      sourceClusterId: clusterId,
+    };
+    setDragNodeId(node.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", node.id);
+  }
+
+  function handleDragEnd() {
+    dragRef.current = null;
+    setDragNodeId(null);
+    setDropTarget(null);
+  }
+
+  function handleDragOver(e: React.DragEvent, sectionKey: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropTarget !== sectionKey) setDropTarget(sectionKey);
+  }
+
+  function handleDragLeave(e: React.DragEvent, sectionKey: string) {
+    // Only clear if we're actually leaving the container (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget as HTMLElement)) {
+      if (dropTarget === sectionKey) setDropTarget(null);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent, targetWorkstream: string, targetClusterId?: string) {
+    e.preventDefault();
+    setDropTarget(null);
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    const nodeId = drag.nodeId;
+    const sourceWs = drag.sourceWorkstream;
+    const sourceCluster = drag.sourceClusterId;
+    dragRef.current = null;
+    setDragNodeId(null);
+
+    // If dropped in the same group, nothing to do (no persistent sort order)
+    if (sourceWs === targetWorkstream && sourceCluster === targetClusterId) return;
+
+    // Update workstream if changed
+    if (sourceWs !== targetWorkstream) {
+      updateNode(nodeId, { workstream: targetWorkstream });
+      await patchNode(nodeId, "workstream", targetWorkstream);
+    }
+
+    // Update cluster membership if changed
+    if (sourceCluster !== targetClusterId) {
+      // Remove old parent_of edge
+      if (sourceCluster) {
+        const oldEdge = edges.find(
+          (e) => e.sourceId === sourceCluster && e.targetId === nodeId && e.type === "parent_of"
+        );
+        if (oldEdge) {
+          try {
+            await api(`/edges/${oldEdge.id}`, { method: "DELETE" });
+            removeEdge(oldEdge.id);
+          } catch { /* api() handles errors */ }
+        }
+      }
+      // Create new parent_of edge
+      if (targetClusterId) {
+        try {
+          const edge = await api<Edge>("/edges", {
+            method: "POST",
+            body: JSON.stringify({
+              source_id: targetClusterId,
+              target_id: nodeId,
+              type: "parent_of",
+            }),
+          });
+          addEdge(edge);
+        } catch { /* api() handles errors */ }
+      }
+    }
+  }
 
   async function patchNode(id: string, field: string, value: unknown) {
     // Map camelCase to snake_case for API
@@ -134,12 +230,23 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     }
   }
 
-  function renderCard(node: Node) {
+  function renderCard(node: Node, clusterId?: string) {
     const isExpanded = expandedCard === node.id;
     const raciData = parseRaci(node.raci);
+    const isDragging = dragNodeId === node.id;
 
     return (
-      <div key={node.id} style={cardStyle}>
+      <div
+        key={node.id}
+        draggable
+        onDragStart={(e) => handleDragStart(e, node, clusterId)}
+        onDragEnd={handleDragEnd}
+        style={{
+          ...cardStyle,
+          opacity: isDragging ? 0.4 : 1,
+          cursor: "grab",
+        }}
+      >
         {/* Left accent bar */}
         <div style={{ width: 4, borderRadius: "4px 0 0 4px", background: priorityColor(node.priority), flexShrink: 0 }} />
 
@@ -401,8 +508,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                         </span>
                       </div>
                       {!isSubCollapsed && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          {children.map(renderCard)}
+                        <div
+                          style={{
+                            display: "flex", flexDirection: "column", gap: 4,
+                            ...(dropTarget === subKey ? dropZoneHighlightStyle : {}),
+                          }}
+                          onDragOver={(e) => handleDragOver(e, subKey)}
+                          onDragLeave={(e) => handleDragLeave(e, subKey)}
+                          onDrop={(e) => handleDrop(e, ws, cluster.id)}
+                        >
+                          {children.map((n) => renderCard(n, cluster.id))}
                           {renderAddRow(subKey, ws, cluster.id)}
                         </div>
                       )}
@@ -424,8 +539,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       </span>
                     </div>
                     {!collapsedSections.has(`other:${ws}`) && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {ungrouped.map(renderCard)}
+                      <div
+                        style={{
+                          display: "flex", flexDirection: "column", gap: 4,
+                          ...(dropTarget === `other:${ws}` ? dropZoneHighlightStyle : {}),
+                        }}
+                        onDragOver={(e) => handleDragOver(e, `other:${ws}`)}
+                        onDragLeave={(e) => handleDragLeave(e, `other:${ws}`)}
+                        onDrop={(e) => handleDrop(e, ws)}
+                      >
+                        {ungrouped.map((n) => renderCard(n))}
                       </div>
                     )}
                   </div>
@@ -433,8 +556,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
                 {/* If no clusters, just list ungrouped directly */}
                 {clusters.length === 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {ungrouped.map(renderCard)}
+                  <div
+                    style={{
+                      display: "flex", flexDirection: "column", gap: 4,
+                      ...(dropTarget === wsKey ? dropZoneHighlightStyle : {}),
+                    }}
+                    onDragOver={(e) => handleDragOver(e, wsKey)}
+                    onDragLeave={(e) => handleDragLeave(e, wsKey)}
+                    onDrop={(e) => handleDrop(e, ws)}
+                  >
+                    {ungrouped.map((n) => renderCard(n))}
                   </div>
                 )}
 
@@ -522,4 +653,12 @@ const addRowActiveStyle: React.CSSProperties = {
   border: "1px solid #B81917",
   borderRadius: 6,
   marginTop: 4,
+};
+
+const dropZoneHighlightStyle: React.CSSProperties = {
+  background: "rgba(184, 25, 23, 0.06)",
+  borderRadius: 6,
+  outline: "2px dashed #B81917",
+  outlineOffset: 2,
+  transition: "background 0.15s, outline 0.15s",
 };
