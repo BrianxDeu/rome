@@ -1,0 +1,9 @@
+{
+  "name": "@rome/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@rome/shared": "*"
+  }
+}
