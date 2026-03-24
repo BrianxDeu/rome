@@ -14,10 +14,20 @@ export type PublicUser = Omit<User, "passwordHash">;
 
 export interface Node {
   id: string;
-  title: string;
-  body: string;
-  type: string;
+  name: string;
   status: string;
+  priority: string;
+  startDate: string | null;
+  endDate: string | null;
+  budget: number | null;
+  deliverable: string | null;
+  notes: string | null;
+  raci: string | null;
+  workstream: string | null;
+  x: number | null;
+  y: number | null;
+  positionPinned: number | null;
+  attachments: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

@@ -1,4 +1,4 @@
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -12,10 +12,20 @@ export const users = sqliteTable("users", {
 
 export const nodes = sqliteTable("nodes", {
   id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  body: text("body").notNull().default(""),
-  type: text("type").notNull().default("default"),
-  status: text("status").notNull().default("active"),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("not_started"),
+  priority: text("priority").notNull().default("P2"),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  budget: real("budget"),
+  deliverable: text("deliverable"),
+  notes: text("notes"),
+  raci: text("raci"),
+  workstream: text("workstream"),
+  x: real("x"),
+  y: real("y"),
+  positionPinned: integer("position_pinned").default(0),
+  attachments: text("attachments"),
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id),
@@ -27,11 +37,11 @@ export const edges = sqliteTable("edges", {
   id: text("id").primaryKey(),
   sourceId: text("source_id")
     .notNull()
-    .references(() => nodes.id),
+    .references(() => nodes.id, { onDelete: "cascade" }),
   targetId: text("target_id")
     .notNull()
-    .references(() => nodes.id),
-  type: text("type").notNull().default("default"),
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id),

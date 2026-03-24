@@ -27,10 +27,20 @@ export function initTables(sqlite: BetterSqlite3.Database) {
 
     CREATE TABLE IF NOT EXISTS nodes (
       id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL DEFAULT '',
-      type TEXT NOT NULL DEFAULT 'default',
-      status TEXT NOT NULL DEFAULT 'active',
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'not_started',
+      priority TEXT NOT NULL DEFAULT 'P2',
+      start_date TEXT,
+      end_date TEXT,
+      budget REAL,
+      deliverable TEXT,
+      notes TEXT,
+      raci TEXT,
+      workstream TEXT,
+      x REAL,
+      y REAL,
+      position_pinned INTEGER DEFAULT 0,
+      attachments TEXT,
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -38,9 +48,9 @@ export function initTables(sqlite: BetterSqlite3.Database) {
 
     CREATE TABLE IF NOT EXISTS edges (
       id TEXT PRIMARY KEY,
-      source_id TEXT NOT NULL REFERENCES nodes(id),
-      target_id TEXT NOT NULL REFERENCES nodes(id),
-      type TEXT NOT NULL DEFAULT 'default',
+      source_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+      target_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
