@@ -3,6 +3,7 @@ import { TopBar, type ViewTab } from "./components/TopBar";
 import { NodePanel } from "./components/NodePanel";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
+import { GraphView } from "./pages/GraphView";
 import { useSync } from "./hooks/useSync";
 import { useGraphStore } from "./stores/graphStore";
 
@@ -31,11 +32,7 @@ export function Shell() {
         ) : activeView === "gantt" ? (
           <GanttView onNavigateToNode={handleNavigateToNode} />
         ) : (
-          <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <p style={{ color: "var(--rome-text-muted)" }}>
-              Graph view — coming soon
-            </p>
-          </main>
+          <GraphView onNavigateToNode={handleNavigateToNode} />
         )}
         {selectedNode && <NodePanel />}
       </div>
