@@ -163,6 +163,34 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     } catch {}
   }
 
+  async function boardAddCluster(workstream: string) {
+    if (!boardAddLabel.trim()) return;
+    try {
+      // Find the workstream header node to use as parent
+      const wsHeader = nodes.find((n) => isClusterNode(n.id, childrenMap) && n.workstream === workstream && !parentMap.has(n.id));
+      const node = await api<Node>("/nodes", {
+        method: "POST",
+        body: JSON.stringify({
+          name: boardAddLabel.trim(),
+          workstream,
+          priority: "P1",
+          status: "not_started",
+        }),
+      });
+      addNode(node);
+      // Make it a child of the workstream header if one exists
+      if (wsHeader) {
+        const edge = await api<Edge>("/edges", {
+          method: "POST",
+          body: JSON.stringify({ source_id: wsHeader.id, target_id: node.id, type: "parent_of" }),
+        });
+        addEdge(edge);
+      }
+      setBoardAddLabel("");
+      setBoardAddGroup(null);
+    } catch {}
+  }
+
   async function boardAddNode(workstream: string, clusterId?: string) {
     if (!boardAddLabel.trim()) return;
     try {
@@ -304,36 +332,36 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     );
   }
 
-  function renderAddRow(workstream: string, clusterId?: string) {
+  function renderAddRow(workstream: string, clusterId?: string, isGroupAdd?: boolean) {
     const key = clusterId ? `${workstream}/${clusterId}` : workstream;
-    if (onAddNode) {
-      return (
-        <div className="board-add-row" onClick={() => onAddNode(workstream, clusterId)}>
-          <span style={{ color: "#BBB", fontWeight: 600, fontSize: 14 }}>+</span>
-          <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>Add item</span>
-        </div>
-      );
-    }
+    const label = isGroupAdd ? "Add node group" : "Add node";
+    const placeholder = isGroupAdd ? "New node group name..." : "New node name...";
     return boardAddGroup === key ? (
       <div className="board-add-row" style={{ borderStyle: "solid", borderColor: "#B81917" }}>
         <span style={{ color: "#B81917", fontWeight: 600, fontSize: 14 }}>+</span>
         <input
           autoFocus
-          placeholder="New item name..."
+          placeholder={placeholder}
           value={boardAddLabel}
           onChange={(e) => setBoardAddLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") boardAddNode(workstream, clusterId);
+            if (e.key === "Enter") {
+              if (isGroupAdd) boardAddCluster(workstream);
+              else boardAddNode(workstream, clusterId);
+            }
             if (e.key === "Escape") { setBoardAddGroup(null); setBoardAddLabel(""); }
           }}
         />
-        <button className="btn primary" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => boardAddNode(workstream, clusterId)}>ADD</button>
+        <button className="btn primary" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => {
+          if (isGroupAdd) boardAddCluster(workstream);
+          else boardAddNode(workstream, clusterId);
+        }}>ADD</button>
         <button className="btn" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</button>
       </div>
     ) : (
       <div className="board-add-row" onClick={() => setBoardAddGroup(key)}>
         <span style={{ color: "#BBB", fontWeight: 600, fontSize: 14 }}>+</span>
-        <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>Add item</span>
+        <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>{label}</span>
       </div>
     );
   }
@@ -415,7 +443,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   return n ? renderCard(n, ungroupedKey) : null;
                 })
               }
-              {renderAddRow(ws)}
+              {renderAddRow(ws, undefined, true)}
             </div>
           </div>
         );
