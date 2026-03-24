@@ -629,6 +629,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
                   strokeWidth={1}
                   strokeDasharray="8 4"
                   opacity={0.6}
+                  style={{ pointerEvents: "none" }}
                 />
                 <text
                   x={ov.x + 10}
@@ -763,6 +764,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
                       stroke={color}
                       strokeOpacity={isSel ? 0.4 : 0.12}
                       strokeWidth={isSel ? 2 : 1}
+                      style={{ pointerEvents: "none" }}
                     />
                     {/* Header bar */}
                     <rect
@@ -784,6 +786,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
                       height={8}
                       fill={color}
                       fillOpacity={0.07}
+                      style={{ pointerEvents: "none" }}
                     />
                     {/* Cluster label */}
                     <text
