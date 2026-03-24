@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { edges, nodes } from "@rome/shared/schema";
 import type { Db } from "../db.js";
+import { broadcast } from "../socket.js";
 
 const createSchema = z.object({
   source_id: z.string(),
@@ -114,7 +115,9 @@ export function edgeRoutes(db: Db): Router {
       .run();
 
     const edge = db.select().from(edges).where(eq(edges.id, id)).get();
-    res.status(201).json(toEdgeJson(edge!));
+    const edgeJson = toEdgeJson(edge!);
+    broadcast({ type: "edge:created", payload: edgeJson as unknown as Record<string, unknown> });
+    res.status(201).json(edgeJson);
   });
 
   router.delete("/:id", (req, res) => {
@@ -125,6 +128,7 @@ export function edgeRoutes(db: Db): Router {
     }
 
     db.delete(edges).where(eq(edges.id, req.params.id!)).run();
+    broadcast({ type: "edge:deleted", payload: { id: req.params.id! } });
     res.status(204).send();
   });
 

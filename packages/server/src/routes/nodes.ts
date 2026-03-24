@@ -3,6 +3,7 @@ import { eq, and, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { nodes, edges } from "@rome/shared/schema";
 import type { Db } from "../db.js";
+import { broadcast } from "../socket.js";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -114,6 +115,7 @@ export function nodeRoutes(db: Db): Router {
       .run();
 
     const node = db.select().from(nodes).where(eq(nodes.id, id)).get();
+    broadcast({ type: "node:created", payload: node as unknown as Record<string, unknown> });
     res.status(201).json(node);
   });
 
@@ -151,6 +153,7 @@ export function nodeRoutes(db: Db): Router {
     db.update(nodes).set(changes).where(eq(nodes.id, req.params.id!)).run();
     const updated = db.select().from(nodes).where(eq(nodes.id, req.params.id!)).get();
 
+    broadcast({ type: "node:updated", payload: updated as unknown as Record<string, unknown> });
     res.json(updated);
   });
 
@@ -163,6 +166,7 @@ export function nodeRoutes(db: Db): Router {
 
     // Edges are cascade-deleted via ON DELETE CASCADE in the schema
     db.delete(nodes).where(eq(nodes.id, req.params.id!)).run();
+    broadcast({ type: "node:deleted", payload: { id: req.params.id! } });
     res.status(204).send();
   });
 
