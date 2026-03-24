@@ -1,6 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "../api";
 import { useGraphStore } from "../stores/graphStore";
+import {
+  statusLabel,
+  statusColor,
+  priorityColor,
+  PRIORITIES,
+  buildClusterMaps,
+} from "../constants";
 
 interface NodeRollup {
   id: string;
@@ -19,7 +26,7 @@ interface BudgetResponse {
   workstreams: WorkstreamRollup[];
 }
 
-type SortField = "name" | "budget" | "status" | "priority";
+type SortField = "name" | "priority" | "workstream" | "status" | "owner" | "budget";
 type SortDir = "asc" | "desc";
 
 interface BudgetViewProps {
@@ -35,23 +42,37 @@ const statusOrder: Record<string, number> = {
   cancelled: 4,
 };
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const WS_COLORS = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
+
+function fmt$(value: number): string {
+  return value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 }
 
 export function BudgetView({ onNavigateToNode }: BudgetViewProps) {
   const [data, setData] = useState<BudgetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [wsFilter, setWsFilter] = useState("all");
+  const [editingBudgets, setEditingBudgets] = useState<Record<string, string>>({});
 
   const graphNodes = useGraphStore((s) => s.nodes);
+  const graphEdges = useGraphStore((s) => s.edges);
+  const updateNodeInStore = useGraphStore((s) => s.updateNode);
+
+  const { childrenMap } = useMemo(() => buildClusterMaps(graphEdges), [graphEdges]);
 
   const nodeMap = useMemo(() => {
-    const m = new Map<string, { status: string; priority: string }>();
+    const m = new Map<
+      string,
+      { status: string; priority: string; workstream: string | null; raci: string | null }
+    >();
     for (const n of graphNodes) {
-      m.set(n.id, { status: n.status, priority: n.priority });
+      m.set(n.id, { status: n.status, priority: n.priority, workstream: n.workstream, raci: n.raci });
     }
     return m;
   }, [graphNodes]);
@@ -67,14 +88,99 @@ export function BudgetView({ onNavigateToNode }: BudgetViewProps) {
     return data.workstreams.reduce((sum, ws) => sum + ws.total, 0);
   }, [data]);
 
-  const toggleExpand = useCallback((ws: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(ws)) next.delete(ws);
-      else next.add(ws);
-      return next;
+  // Workstream color map
+  const wsColorMap = useMemo(() => {
+    if (!data) return new Map<string, string>();
+    const m = new Map<string, string>();
+    data.workstreams.forEach((ws, i) => {
+      m.set(ws.workstream, WS_COLORS[i % WS_COLORS.length]);
     });
-  }, []);
+    return m;
+  }, [data]);
+
+  // Flat list of non-cluster budget items
+  const allItems = useMemo(() => {
+    if (!data) return [];
+    const items: (NodeRollup & { workstream: string })[] = [];
+    for (const ws of data.workstreams) {
+      for (const node of ws.nodes) {
+        // Exclude cluster parent nodes
+        if (childrenMap.has(node.id)) continue;
+        items.push({ ...node, workstream: ws.workstream });
+      }
+    }
+    return items;
+  }, [data, childrenMap]);
+
+  // Priority breakdown
+  const priorityBreakdown = useMemo(() => {
+    return ["P0", "P1", "P2", "P3"].map((p) => {
+      const matching = allItems.filter((item) => nodeMap.get(item.id)?.priority === p);
+      return {
+        priority: p,
+        count: matching.length,
+        budget: matching.reduce((s, n) => s + (n.own || 0), 0),
+      };
+    });
+  }, [allItems, nodeMap]);
+
+  // Filtered items
+  const filteredItems = useMemo(() => {
+    if (wsFilter === "all") return allItems;
+    return allItems.filter((item) => item.workstream === wsFilter);
+  }, [allItems, wsFilter]);
+
+  // Sorted items
+  const sortedItems = useMemo(() => {
+    const sorted = [...filteredItems];
+    const dir = sortDir === "asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      switch (sortField) {
+        case "name":
+          return dir * a.name.localeCompare(b.name);
+        case "budget":
+          return dir * (a.own - b.own);
+        case "workstream":
+          return dir * a.workstream.localeCompare(b.workstream);
+        case "status": {
+          const sa = statusOrder[nodeMap.get(a.id)?.status ?? ""] ?? 99;
+          const sb = statusOrder[nodeMap.get(b.id)?.status ?? ""] ?? 99;
+          return dir * (sa - sb);
+        }
+        case "priority": {
+          const pa = priorityOrder[nodeMap.get(a.id)?.priority ?? ""] ?? 99;
+          const pb = priorityOrder[nodeMap.get(b.id)?.priority ?? ""] ?? 99;
+          return dir * (pa - pb);
+        }
+        case "owner": {
+          const oa = getOwner(a.id);
+          const ob = getOwner(b.id);
+          return dir * oa.localeCompare(ob);
+        }
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [filteredItems, sortField, sortDir, nodeMap]);
+
+  const filteredTotal = useMemo(
+    () => sortedItems.reduce((s, n) => s + (n.own || 0), 0),
+    [sortedItems],
+  );
+
+  function getOwner(nodeId: string): string {
+    const raci = nodeMap.get(nodeId)?.raci;
+    if (!raci) return "";
+    try {
+      let str = raci;
+      if (str.startsWith('"') && str.endsWith('"')) str = JSON.parse(str);
+      const parsed = typeof str === "string" ? JSON.parse(str) : str;
+      return parsed.responsible || "";
+    } catch {
+      return "";
+    }
+  }
 
   const handleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
@@ -87,261 +193,417 @@ export function BudgetView({ onNavigateToNode }: BudgetViewProps) {
     });
   }, []);
 
-  const sortNodes = useCallback(
-    (nodes: NodeRollup[]): NodeRollup[] => {
-      const sorted = [...nodes];
-      const dir = sortDir === "asc" ? 1 : -1;
-      sorted.sort((a, b) => {
-        switch (sortField) {
-          case "name":
-            return dir * a.name.localeCompare(b.name);
-          case "budget":
-            return dir * (a.rollup - b.rollup);
-          case "status": {
-            const sa = statusOrder[nodeMap.get(a.id)?.status ?? ""] ?? 99;
-            const sb = statusOrder[nodeMap.get(b.id)?.status ?? ""] ?? 99;
-            return dir * (sa - sb);
-          }
-          case "priority": {
-            const pa = priorityOrder[nodeMap.get(a.id)?.priority ?? ""] ?? 99;
-            const pb = priorityOrder[nodeMap.get(b.id)?.priority ?? ""] ?? 99;
-            return dir * (pa - pb);
-          }
-          default:
-            return 0;
-        }
+  const handleBudgetBlur = useCallback(
+    async (nodeId: string) => {
+      const val = editingBudgets[nodeId];
+      if (val === undefined) return;
+      const budget = parseInt(val) || 0;
+      setEditingBudgets((prev) => {
+        const next = { ...prev };
+        delete next[nodeId];
+        return next;
       });
-      return sorted;
+      try {
+        await api(`/nodes/${nodeId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ budget }),
+        });
+        updateNodeInStore(nodeId, { budget });
+        // Refresh budget data
+        const fresh = await api<BudgetResponse>("/budget");
+        setData(fresh);
+      } catch {
+        // Revert on failure silently — data will refresh
+      }
     },
-    [sortField, sortDir, nodeMap],
+    [editingBudgets, updateNodeInStore],
   );
-
-  if (error) {
-    return <div style={styles.container}><p style={styles.error}>Failed to load budget data: {error}</p></div>;
-  }
-
-  if (!data) {
-    return <div style={styles.container}><p style={styles.loading}>Loading budget data...</p></div>;
-  }
 
   const sortIndicator = (field: SortField) =>
     sortField === field ? (sortDir === "asc" ? " \u25B2" : " \u25BC") : "";
 
+  if (error) {
+    return (
+      <div style={S.container}>
+        <p style={S.error}>Failed to load budget data: {error}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div style={S.container}>
+        <p style={S.loading}>Loading budget data...</p>
+      </div>
+    );
+  }
+
   return (
-    <div style={styles.container}>
-      <div style={styles.grandTotal}>
-        <span style={styles.grandTotalLabel}>Grand Total</span>
-        <span style={styles.grandTotalValue}>{formatCurrency(grandTotal)}</span>
+    <div style={S.container}>
+      {/* Hero */}
+      <div style={S.hero}>
+        <div style={S.heroTotal}>{fmt$(grandTotal)}</div>
+        <div style={S.heroSubtitle}>Total Allocated</div>
       </div>
 
-      <div style={styles.cards}>
+      {/* By Workstream bar chart */}
+      <div style={S.section}>
+        <div style={S.sectionTitle}>By Workstream</div>
         {data.workstreams.map((ws) => {
-          const isExpanded = expanded.has(ws.workstream);
-          const proportion = grandTotal > 0 ? ws.total / grandTotal : 0;
-
+          const pct = grandTotal > 0 ? Math.round((ws.total / grandTotal) * 100) : 0;
+          const color = wsColorMap.get(ws.workstream) ?? "#999";
           return (
-            <div key={ws.workstream} style={styles.card}>
-              <button
-                style={styles.cardHeader}
-                onClick={() => toggleExpand(ws.workstream)}
-                aria-expanded={isExpanded}
-              >
-                <div style={styles.cardHeaderLeft}>
-                  <span style={styles.expandIcon}>{isExpanded ? "\u25BC" : "\u25B6"}</span>
-                  <span style={styles.wsName}>{ws.workstream}</span>
-                  <span style={styles.nodeCount}>({ws.nodes.length})</span>
-                </div>
-                <span style={styles.wsTotal}>{formatCurrency(ws.total)}</span>
-              </button>
-
-              <div style={styles.barTrack}>
+            <div key={ws.workstream} style={S.barRow}>
+              <div style={S.barLabel}>{ws.workstream}</div>
+              <div style={S.barTrack}>
                 <div
                   style={{
-                    ...styles.barFill,
-                    width: `${Math.round(proportion * 100)}%`,
+                    ...S.barFill,
+                    width: `${pct}%`,
+                    background: color,
                   }}
-                />
-              </div>
-
-              {isExpanded && (
-                <div style={styles.tableWrap}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        {(
-                          [
-                            ["name", "Name"],
-                            ["budget", "Budget"],
-                            ["status", "Status"],
-                            ["priority", "Priority"],
-                          ] as [SortField, string][]
-                        ).map(([field, label]) => (
-                          <th
-                            key={field}
-                            style={styles.th}
-                            onClick={() => handleSort(field)}
-                          >
-                            {label}{sortIndicator(field)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortNodes(ws.nodes).map((node) => {
-                        const meta = nodeMap.get(node.id);
-                        return (
-                          <tr
-                            key={node.id}
-                            style={styles.tr}
-                            onClick={() => onNavigateToNode(node.id)}
-                          >
-                            <td style={styles.td}>{node.name}</td>
-                            <td style={{ ...styles.td, ...styles.tdRight }}>
-                              {formatCurrency(node.rollup)}
-                            </td>
-                            <td style={styles.td}>{meta?.status ?? "-"}</td>
-                            <td style={styles.td}>{meta?.priority ?? "-"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                >
+                  {pct > 8 && <span style={S.barPct}>{pct}%</span>}
                 </div>
-              )}
+              </div>
+              <div style={S.barAmount}>{fmt$(ws.total)}</div>
             </div>
           );
         })}
+      </div>
+
+      {/* By Priority table */}
+      <div style={S.section}>
+        <div style={S.sectionTitle}>By Priority</div>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>Priority</th>
+              <th style={S.th}>Count</th>
+              <th style={{ ...S.th, textAlign: "right" }}>Budget</th>
+            </tr>
+          </thead>
+          <tbody>
+            {priorityBreakdown.map((row) => (
+              <tr key={row.priority}>
+                <td style={S.td}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: priorityColor(row.priority),
+                      marginRight: 8,
+                    }}
+                  />
+                  <span style={{ fontWeight: 600, color: priorityColor(row.priority) }}>
+                    {row.priority} — {PRIORITIES[row.priority]?.label}
+                  </span>
+                </td>
+                <td style={S.td}>{row.count}</td>
+                <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  {fmt$(row.budget)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Budget Items */}
+      <div style={S.section}>
+        <div style={S.itemsHeader}>
+          <div style={S.sectionTitle}>Budget Items</div>
+          <select
+            style={S.filterSelect}
+            value={wsFilter}
+            onChange={(e) => setWsFilter(e.target.value)}
+          >
+            <option value="all">All Workstreams</option>
+            {data.workstreams.map((ws) => (
+              <option key={ws.workstream} value={ws.workstream}>
+                {ws.workstream}
+              </option>
+            ))}
+          </select>
+        </div>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              {(
+                [
+                  ["name", "Task"],
+                  ["priority", "Priority"],
+                  ["workstream", "Workstream"],
+                  ["status", "Status"],
+                  ["owner", "Owner"],
+                  ["budget", "Budget"],
+                ] as [SortField, string][]
+              ).map(([field, label]) => (
+                <th
+                  key={field}
+                  style={{
+                    ...S.th,
+                    cursor: "pointer",
+                    textAlign: field === "budget" ? "right" : "left",
+                  }}
+                  onClick={() => handleSort(field)}
+                >
+                  {label}
+                  {sortIndicator(field)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedItems.map((item) => {
+              const meta = nodeMap.get(item.id);
+              const isEditing = item.id in editingBudgets;
+              return (
+                <tr key={item.id} style={S.itemRow}>
+                  <td
+                    style={{ ...S.td, cursor: "pointer", fontWeight: 500 }}
+                    onClick={() => onNavigateToNode(item.id)}
+                  >
+                    {item.name}
+                  </td>
+                  <td style={S.td}>
+                    <span style={{ color: priorityColor(meta?.priority ?? ""), fontWeight: 600 }}>
+                      {meta?.priority ?? "-"}
+                    </span>
+                  </td>
+                  <td style={S.td}>{item.workstream}</td>
+                  <td style={S.td}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: statusColor(meta?.status ?? ""),
+                          flexShrink: 0,
+                        }}
+                      />
+                      {statusLabel(meta?.status ?? "")}
+                    </span>
+                  </td>
+                  <td style={S.td}>{getOwner(item.id)}</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>
+                    <input
+                      type="number"
+                      style={S.budgetInput}
+                      value={isEditing ? editingBudgets[item.id] : item.own}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setEditingBudgets((prev) => ({ ...prev, [item.id]: e.target.value }))
+                      }
+                      onFocus={() =>
+                        setEditingBudgets((prev) => ({
+                          ...prev,
+                          [item.id]: String(item.own),
+                        }))
+                      }
+                      onBlur={() => handleBudgetBlur(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+            <tr style={S.totalRow}>
+              <td style={{ ...S.td, fontWeight: 700 }}>TOTAL</td>
+              <td style={S.td} />
+              <td style={S.td} />
+              <td style={S.td} />
+              <td style={S.td} />
+              <td
+                style={{
+                  ...S.td,
+                  textAlign: "right",
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {fmt$(filteredTotal)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const S: Record<string, React.CSSProperties> = {
   container: {
     flex: 1,
     padding: "24px",
     overflowY: "auto",
   },
   loading: {
-    color: "var(--rome-text-muted)",
+    color: "#999",
     textAlign: "center",
-    marginTop: "40px",
+    marginTop: 40,
   },
   error: {
     color: "#e74c3c",
     textAlign: "center",
-    marginTop: "40px",
+    marginTop: 40,
   },
-  grandTotal: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    marginBottom: "24px",
-    padding: "20px 24px",
-    background: "var(--rome-surface)",
-    borderRadius: "8px",
-    border: "1px solid var(--rome-border)",
+
+  // Hero
+  hero: {
+    textAlign: "center",
+    marginBottom: 32,
+    padding: "32px 24px",
   },
-  grandTotalLabel: {
-    fontSize: "18px",
-    fontWeight: 600,
-    color: "var(--rome-text)",
-  },
-  grandTotalValue: {
-    fontSize: "28px",
+  heroTotal: {
+    fontSize: 48,
     fontWeight: 700,
-    color: "var(--rome-red)",
+    color: "#B81917",
+    lineHeight: 1.1,
+    fontVariantNumeric: "tabular-nums",
   },
-  cards: {
+  heroSubtitle: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 6,
+    textTransform: "uppercase" as const,
+    letterSpacing: 2,
+  },
+
+  // Sections
+  section: {
+    marginBottom: 28,
+    background: "var(--rome-surface, #fff)",
+    borderRadius: 8,
+    border: "1px solid var(--rome-border, #E7E7E7)",
+    padding: "16px 20px",
+  },
+  sectionTitle: {
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: "uppercase" as const,
+    color: "#999",
+    marginBottom: 12,
+    fontWeight: 600,
+  },
+
+  // Bar chart
+  barRow: {
     display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-  },
-  card: {
-    background: "var(--rome-surface)",
-    borderRadius: "8px",
-    border: "1px solid var(--rome-border)",
-    overflow: "hidden",
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    width: "100%",
-    padding: "14px 20px",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "var(--rome-text)",
-    fontSize: "15px",
+    gap: 12,
+    marginBottom: 8,
+  },
+  barLabel: {
+    width: 120,
+    fontSize: 13,
     fontWeight: 500,
-    fontFamily: "inherit",
-    textAlign: "left",
-  },
-  cardHeaderLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-  },
-  expandIcon: {
-    fontSize: "11px",
-    color: "var(--rome-text-muted)",
-    width: "14px",
-  },
-  wsName: {
-    fontWeight: 600,
-  },
-  nodeCount: {
-    color: "var(--rome-text-muted)",
-    fontSize: "13px",
-  },
-  wsTotal: {
-    fontWeight: 600,
-    color: "var(--rome-red)",
-    fontSize: "16px",
+    color: "var(--rome-text, #1A1A1A)",
+    flexShrink: 0,
   },
   barTrack: {
-    height: "4px",
-    background: "var(--rome-bg)",
-    margin: "0 20px 4px",
-    borderRadius: "2px",
+    flex: 1,
+    height: 22,
+    background: "#F5F5F5",
+    borderRadius: 4,
     overflow: "hidden",
   },
   barFill: {
     height: "100%",
-    background: "var(--rome-red)",
-    borderRadius: "2px",
+    borderRadius: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     transition: "width 0.3s ease",
+    minWidth: 0,
   },
-  tableWrap: {
-    padding: "0 20px 16px",
-    overflowX: "auto",
+  barPct: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 600,
   },
+  barAmount: {
+    width: 90,
+    textAlign: "right" as const,
+    fontSize: 13,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+    color: "var(--rome-text, #1A1A1A)",
+    flexShrink: 0,
+  },
+
+  // Tables
   table: {
     width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "13px",
+    borderCollapse: "collapse" as const,
+    fontSize: 13,
   },
   th: {
-    textAlign: "left",
+    textAlign: "left" as const,
     padding: "8px 12px",
-    borderBottom: "1px solid var(--rome-border)",
-    color: "var(--rome-text-muted)",
+    borderBottom: "1px solid var(--rome-border, #E7E7E7)",
+    color: "#999",
     fontWeight: 500,
-    cursor: "pointer",
-    userSelect: "none",
-    whiteSpace: "nowrap",
-  },
-  tr: {
-    cursor: "pointer",
+    userSelect: "none" as const,
+    whiteSpace: "nowrap" as const,
+    fontSize: 11,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
   },
   td: {
     padding: "8px 12px",
-    borderBottom: "1px solid var(--rome-border)",
-    color: "var(--rome-text)",
+    borderBottom: "1px solid var(--rome-border, #E7E7E7)",
+    color: "var(--rome-text, #1A1A1A)",
   },
-  tdRight: {
-    textAlign: "right",
+  itemRow: {
+    cursor: "default",
+  },
+  totalRow: {
+    borderTop: "2px solid #1A1A1A",
+  },
+
+  // Items header
+  itemsHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottom: "1px solid var(--rome-border, #E7E7E7)",
+    paddingBottom: 8,
+    marginBottom: 12,
+  },
+  filterSelect: {
+    fontSize: 11,
+    padding: "4px 8px",
+    border: "1px solid var(--rome-border, #E7E7E7)",
+    borderRadius: 4,
+    background: "#F8F8F8",
+    fontFamily: "Tomorrow, sans-serif",
+    color: "var(--rome-text, #1A1A1A)",
+  },
+
+  // Budget input
+  budgetInput: {
+    width: 90,
+    fontSize: 12,
+    padding: "2px 6px",
+    fontWeight: 600,
+    textAlign: "right" as const,
+    border: "1px solid transparent",
+    borderRadius: 3,
+    background: "transparent",
+    fontFamily: "Tomorrow, sans-serif",
     fontVariantNumeric: "tabular-nums",
+    color: "var(--rome-text, #1A1A1A)",
   },
 };
