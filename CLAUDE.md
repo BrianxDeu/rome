@@ -2,6 +2,34 @@
 
 In-house project management software for DxD (5-10 users).
 
+## CRITICAL SAFETY RULES — READ BEFORE ANY CHANGES
+
+**These rules are non-negotiable. Every agent (polecat, mayor, subagent) must follow them.**
+
+### Data Protection
+- **NEVER delete, reset, or re-seed `rome.db`** — it contains live project data
+- **NEVER run `DROP TABLE`** or truncate any table
+- **NEVER re-run `seed.ts`** on a DB that already has data (check first)
+- **NEVER delete nodes or edges in bulk** — only delete individual items when explicitly asked
+- The `migrate-v2.ts` script is idempotent but should only be run when instructed
+
+### Frontend Changes Don't Touch Data
+- Changing React components, styles, or views must NOT affect the database
+- Frontend deploys are safe — the backend + DB are separate
+- If you need test data, use the API to create it — don't modify the DB directly
+
+### What You CAN Do Safely
+- Modify any file in `packages/client/src/` (frontend code)
+- Modify route handlers in `packages/server/src/routes/` (API logic)
+- Add new API endpoints
+- Run `npm install` to add dependencies
+- Run typecheck and build commands
+
+### Before Committing
+- Run `npx tsc --noEmit -p packages/client/tsconfig.json` to verify no type errors
+- Check that the dev server still works (`curl http://localhost:5173`)
+- Do NOT commit `rome.db`, `rome.db-wal`, or `rome.db-shm`
+
 ## Architecture
 
 npm workspaces monorepo:
