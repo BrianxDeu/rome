@@ -1,0 +1,36 @@
+:root {
+  --rome-red: #B81917;
+  --rome-red-hover: #9e1514;
+  --rome-bg: #0f0f0f;
+  --rome-surface: #1a1a1a;
+  --rome-surface-hover: #252525;
+  --rome-border: #333;
+  --rome-text: #e0e0e0;
+  --rome-text-muted: #888;
+  --font-family: "Tomorrow", system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--rome-bg);
+  color: var(--rome-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+input, button, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+a {
+  color: var(--rome-red);
+  text-decoration: none;
+}
