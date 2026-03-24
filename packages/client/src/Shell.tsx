@@ -47,17 +47,17 @@ export function Shell() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={(v) => { setActiveView(v); if (v === "board") selectNode(null); }}
         onAddNode={() => handleOpenAddNode()}
         onAddWorkstream={() => setAddWorkstreamModal(true)}
       />
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div className="main">
         {activeView === "board" ? (
           <BoardView onNavigateToNode={handleNavigateToNode} onAddNode={handleOpenAddNode} />
-        ) : activeView === "budget" ? (
-          <BudgetView onNavigateToNode={handleNavigateToNode} />
         ) : activeView === "gantt" ? (
           <GanttView onNavigateToNode={handleNavigateToNode} />
+        ) : activeView === "budget" ? (
+          <BudgetView onNavigateToNode={handleNavigateToNode} />
         ) : (
           <GraphView onNavigateToNode={handleNavigateToNode} />
         )}

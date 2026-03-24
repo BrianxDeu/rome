@@ -16,15 +16,17 @@ import {
 const statuses = Object.keys(STATUSES);
 const priorities = Object.keys(PRIORITIES);
 
+// Workstream colors
+const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
+
+function wsColor(ws: string, all: string[]): string {
+  const idx = all.indexOf(ws);
+  return WS_PALETTE[idx >= 0 ? idx % WS_PALETTE.length : 0];
+}
+
 interface BoardViewProps {
   onNavigateToNode: (nodeId: string) => void;
   onAddNode?: (defaultWorkstream?: string, defaultClusterId?: string) => void;
-}
-
-interface DragState {
-  nodeId: string;
-  sourceWorkstream: string;
-  sourceClusterId?: string;
 }
 
 export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
@@ -36,15 +38,12 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const addEdge = useGraphStore((s) => s.addEdge);
   const removeEdge = useGraphStore((s) => s.removeEdge);
 
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [addingIn, setAddingIn] = useState<string | null>(null);
-  const [addLabel, setAddLabel] = useState("");
-
-  // Drag-and-drop state
-  const dragRef = useRef<DragState | null>(null);
-  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null); // section key of drop zone
+  const [boardExpanded, setBoardExpanded] = useState<string | null>(null);
+  const [boardCollapsed, setBoardCollapsed] = useState<Set<string>>(new Set());
+  const [boardOrder, setBoardOrder] = useState<Record<string, string[]>>({});
+  const [boardAddGroup, setBoardAddGroup] = useState<string | null>(null);
+  const [boardAddLabel, setBoardAddLabel] = useState("");
+  const boardDrag = useRef<{ id: string; section: string } | null>(null);
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
 
@@ -56,121 +55,91 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     return Array.from(ws).sort();
   }, [nodes]);
 
-  // Leaf nodes only (exclude cluster parents)
   const leafNodes = useMemo(
     () => nodes.filter((n) => !isClusterNode(n.id, childrenMap)),
     [nodes, childrenMap],
   );
 
-  const toggleSection = useCallback((key: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+  function toggleBoardSub(subId: string) {
+    setBoardCollapsed((prev) => {
+      const n = new Set(prev);
+      if (n.has(subId)) n.delete(subId);
+      else n.add(subId);
+      return n;
     });
-  }, []);
+  }
 
-  // --- Drag-and-drop handlers ---
+  function getBoardOrder(sectionKey: string, nodeIds: string[]): string[] {
+    const order = boardOrder[sectionKey];
+    if (!order) return nodeIds;
+    const ordered: string[] = [];
+    order.forEach((id) => { if (nodeIds.includes(id)) ordered.push(id); });
+    nodeIds.forEach((id) => { if (!ordered.includes(id)) ordered.push(id); });
+    return ordered;
+  }
 
-  function handleDragStart(e: React.DragEvent, node: Node, clusterId?: string) {
-    dragRef.current = {
-      nodeId: node.id,
-      sourceWorkstream: node.workstream ?? "",
-      sourceClusterId: clusterId,
-    };
-    setDragNodeId(node.id);
+  function onBoardDragStart(e: React.DragEvent, nodeId: string, sectionKey: string) {
+    boardDrag.current = { id: nodeId, section: sectionKey };
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", node.id);
+    (e.target as HTMLElement).classList.add("dragging");
   }
 
-  function handleDragEnd() {
-    dragRef.current = null;
-    setDragNodeId(null);
-    setDropTarget(null);
+  function onBoardDragEnd(e: React.DragEvent) {
+    (e.target as HTMLElement).classList.remove("dragging");
+    document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach((el) => {
+      el.classList.remove("drag-over-top", "drag-over-bottom");
+    });
+    boardDrag.current = null;
   }
 
-  function handleDragOver(e: React.DragEvent, sectionKey: string) {
+  function onBoardDragOver(e: React.DragEvent, nodeId: string, sectionKey: string) {
     e.preventDefault();
+    if (!boardDrag.current || boardDrag.current.section !== sectionKey || boardDrag.current.id === nodeId) return;
     e.dataTransfer.dropEffect = "move";
-    if (dropTarget !== sectionKey) setDropTarget(sectionKey);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
+    (e.currentTarget as HTMLElement).classList.add(e.clientY < mid ? "drag-over-top" : "drag-over-bottom");
   }
 
-  function handleDragLeave(e: React.DragEvent, sectionKey: string) {
-    // Only clear if we're actually leaving the container (not entering a child)
-    if (!e.currentTarget.contains(e.relatedTarget as HTMLElement)) {
-      if (dropTarget === sectionKey) setDropTarget(null);
-    }
+  function onBoardDragLeave(e: React.DragEvent) {
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
   }
 
-  async function handleDrop(e: React.DragEvent, targetWorkstream: string, targetClusterId?: string) {
+  function onBoardDrop(e: React.DragEvent, targetId: string, sectionKey: string) {
     e.preventDefault();
-    setDropTarget(null);
-    const drag = dragRef.current;
-    if (!drag) return;
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
+    if (!boardDrag.current || boardDrag.current.section !== sectionKey) return;
+    const dragId = boardDrag.current.id;
+    if (dragId === targetId) return;
 
-    const nodeId = drag.nodeId;
-    const sourceWs = drag.sourceWorkstream;
-    const sourceCluster = drag.sourceClusterId;
-    dragRef.current = null;
-    setDragNodeId(null);
+    const wsKey = sectionKey.split("/")[0];
+    const sectionNodes = leafNodes.filter((n) => n.workstream === wsKey);
+    const filteredNodes = sectionKey.includes("/")
+      ? sectionNodes.filter((n) => parentMap.get(n.id) === sectionKey.split("/")[1])
+      : sectionNodes.filter((n) => !parentMap.has(n.id));
+    const ids = getBoardOrder(sectionKey, filteredNodes.map((n) => n.id));
 
-    // If dropped in the same group, nothing to do (no persistent sort order)
-    if (sourceWs === targetWorkstream && sourceCluster === targetClusterId) return;
+    const fromIdx = ids.indexOf(dragId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
 
-    // Update workstream if changed
-    if (sourceWs !== targetWorkstream) {
-      updateNode(nodeId, { workstream: targetWorkstream });
-      await patchNode(nodeId, "workstream", targetWorkstream);
-    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const insertAfter = e.clientY >= rect.top + rect.height / 2;
+    const newIds = ids.filter((id) => id !== dragId);
+    const insertIdx = newIds.indexOf(targetId) + (insertAfter ? 1 : 0);
+    newIds.splice(insertIdx, 0, dragId);
 
-    // Update cluster membership if changed
-    if (sourceCluster !== targetClusterId) {
-      // Remove old parent_of edge
-      if (sourceCluster) {
-        const oldEdge = edges.find(
-          (e) => e.sourceId === sourceCluster && e.targetId === nodeId && e.type === "parent_of"
-        );
-        if (oldEdge) {
-          try {
-            await api(`/edges/${oldEdge.id}`, { method: "DELETE" });
-            removeEdge(oldEdge.id);
-          } catch { /* api() handles errors */ }
-        }
-      }
-      // Create new parent_of edge
-      if (targetClusterId) {
-        try {
-          const edge = await api<Edge>("/edges", {
-            method: "POST",
-            body: JSON.stringify({
-              source_id: targetClusterId,
-              target_id: nodeId,
-              type: "parent_of",
-            }),
-          });
-          addEdge(edge);
-        } catch { /* api() handles errors */ }
-      }
-    }
+    setBoardOrder((prev) => ({ ...prev, [sectionKey]: newIds }));
+    boardDrag.current = null;
   }
 
   async function patchNode(id: string, field: string, value: unknown) {
-    // Map camelCase to snake_case for API
-    const apiFieldMap: Record<string, string> = {
-      startDate: "start_date",
-      endDate: "end_date",
-      positionPinned: "position_pinned",
-    };
+    const apiFieldMap: Record<string, string> = { startDate: "start_date", endDate: "end_date" };
     const apiField = apiFieldMap[field] ?? field;
     try {
-      await api(`/nodes/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [apiField]: value }),
-      });
-    } catch {
-      // api() handles errors
-    }
+      await api(`/nodes/${id}`, { method: "PATCH", body: JSON.stringify({ [apiField]: value }) });
+    } catch {}
   }
 
   function handleFieldChange(nodeId: string, field: keyof Node, value: unknown) {
@@ -190,202 +159,143 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     try {
       await api(`/nodes/${nodeId}`, { method: "DELETE" });
       removeNode(nodeId);
-      if (expandedCard === nodeId) setExpandedCard(null);
-    } catch {
-      // api() handles errors
-    }
+      if (boardExpanded === nodeId) setBoardExpanded(null);
+    } catch {}
   }
 
-  async function handleAddNode(workstream: string, clusterId?: string) {
-    if (!addLabel.trim()) return;
+  async function boardAddNode(workstream: string, clusterId?: string) {
+    if (!boardAddLabel.trim()) return;
     try {
       const node = await api<Node>("/nodes", {
         method: "POST",
         body: JSON.stringify({
-          name: addLabel.trim(),
+          name: boardAddLabel.trim(),
           workstream,
           priority: "P2",
           status: "not_started",
         }),
       });
       addNode(node);
-
-      // If adding inside a cluster, create parent_of edge
       if (clusterId) {
         const edge = await api<Edge>("/edges", {
           method: "POST",
-          body: JSON.stringify({
-            source_id: clusterId,
-            target_id: node.id,
-            type: "parent_of",
-          }),
+          body: JSON.stringify({ source_id: clusterId, target_id: node.id, type: "parent_of" }),
         });
         addEdge(edge);
       }
-
-      setAddLabel("");
-      setAddingIn(null);
-    } catch {
-      // api() handles errors
-    }
+      setBoardAddLabel("");
+      setBoardAddGroup(null);
+      setBoardExpanded(node.id);
+    } catch {}
   }
 
-  function renderCard(node: Node, clusterId?: string) {
-    const isExpanded = expandedCard === node.id;
-    const raciData = parseRaci(node.raci);
-    const isDragging = dragNodeId === node.id;
+  function renderCard(n: Node, sectionKey: string, clusterId?: string) {
+    const isExp = boardExpanded === n.id;
+    const sColor = statusColor(n.status);
+    const pColor = priorityColor(n.priority);
+    const raciData = parseRaci(n.raci);
 
     return (
       <div
-        key={node.id}
+        key={n.id}
+        className={`board-card ${isExp ? "expanded" : ""}`}
         draggable
-        onDragStart={(e) => handleDragStart(e, node, clusterId)}
-        onDragEnd={handleDragEnd}
-        style={{
-          ...cardStyle,
-          opacity: isDragging ? 0.4 : 1,
-          cursor: "grab",
-        }}
+        onDragStart={(e) => onBoardDragStart(e, n.id, sectionKey)}
+        onDragEnd={onBoardDragEnd}
+        onDragOver={(e) => onBoardDragOver(e, n.id, sectionKey)}
+        onDragLeave={onBoardDragLeave}
+        onDrop={(e) => onBoardDrop(e, n.id, sectionKey)}
+        onClick={() => setBoardExpanded(isExp ? null : n.id)}
       >
-        {/* Left accent bar */}
-        <div style={{ width: 4, borderRadius: "4px 0 0 4px", background: priorityColor(node.priority), flexShrink: 0 }} />
-
-        <div style={{ flex: 1, padding: "10px 12px", minWidth: 0 }}>
-          {/* Top row — clickable to toggle expand */}
-          <div
-            style={{ cursor: "pointer" }}
-            onClick={() => setExpandedCard(isExpanded ? null : node.id)}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {node.name}
-              </span>
-              <span style={{ ...chipStyle, background: priorityColor(node.priority) + "18", color: priorityColor(node.priority) }}>
-                {node.priority}
-              </span>
-              <span style={{ ...chipStyle, background: statusColor(node.status) + "18", color: statusColor(node.status) }}>
-                {statusLabel(node.status)}
-              </span>
-              {raciData.responsible && (
-                <span style={{ fontSize: 10, color: "#666", letterSpacing: 0.3 }}>
-                  {raciData.responsible}
-                </span>
-              )}
+        <div className="board-card-drag" onMouseDown={(e) => e.stopPropagation()}>&#8942;&#8942;</div>
+        <div className="board-card-accent" style={{ background: pColor }} />
+        <div className="board-card-main">
+          <div className="board-card-top">
+            <div className="board-card-title">{n.name}</div>
+            <div className="board-card-meta">
+              <span className="board-card-chip" style={{ background: pColor + "18", color: pColor }}>{n.priority}</span>
+              <span className="board-card-chip" style={{ background: sColor + "18", color: sColor }}>{statusLabel(n.status)}</span>
+              {raciData.responsible && <span className="board-card-owner">{raciData.responsible}</span>}
             </div>
           </div>
-
-          {/* Expanded body */}
-          {isExpanded && (
-            <div style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
-              {/* Notes */}
-              <div style={{ marginBottom: 8 }}>
-                <label style={labelStyle}>Notes</label>
+          {isExp && (
+            <div className="board-card-body" onClick={(e) => e.stopPropagation()}>
+              <div className="dp-field">
+                <label className="dp-label">Notes</label>
                 <textarea
-                  style={{ ...inputStyle, minHeight: 60, resize: "vertical" }}
-                  value={node.notes ?? ""}
+                  value={n.notes ?? ""}
                   placeholder="Freeform notes, links, context..."
-                  onChange={(e) => handleFieldChange(node.id, "notes", e.target.value)}
-                  onBlur={(e) => handleFieldBlur(node.id, "notes", e.target.value)}
+                  onChange={(e) => handleFieldChange(n.id, "notes", e.target.value)}
+                  onBlur={(e) => handleFieldBlur(n.id, "notes", e.target.value)}
                 />
               </div>
-
-              {/* Deliverable */}
-              <div style={{ marginBottom: 8 }}>
-                <label style={labelStyle}>Deliverables</label>
+              <div className="dp-field" style={{ marginTop: 8 }}>
+                <label className="dp-label">Deliverables</label>
                 <textarea
-                  style={{ ...inputStyle, minHeight: 40, resize: "vertical" }}
-                  value={node.deliverable ?? ""}
+                  value={n.deliverable ?? ""}
                   placeholder="What does done look like?"
-                  onChange={(e) => handleFieldChange(node.id, "deliverable", e.target.value)}
-                  onBlur={(e) => handleFieldBlur(node.id, "deliverable", e.target.value)}
+                  onChange={(e) => handleFieldChange(n.id, "deliverable", e.target.value)}
+                  onBlur={(e) => handleFieldBlur(n.id, "deliverable", e.target.value)}
                 />
               </div>
-
-              {/* Status / Priority / Owner / Budget row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <div>
-                  <label style={labelStyle}>Status</label>
-                  <select
-                    style={inputStyle}
-                    value={node.status}
-                    onChange={(e) => handleSelectChange(node.id, "status", e.target.value)}
-                  >
-                    {statuses.map((s) => (
-                      <option key={s} value={s}>{statusLabel(s)}</option>
-                    ))}
+              <div className="board-card-fields">
+                <div className="dp-field">
+                  <label className="dp-label">Status</label>
+                  <select className="dp-input" value={n.status} onChange={(e) => handleSelectChange(n.id, "status", e.target.value)}>
+                    {statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label style={labelStyle}>Priority</label>
-                  <select
-                    style={inputStyle}
-                    value={node.priority}
-                    onChange={(e) => handleSelectChange(node.id, "priority", e.target.value)}
-                  >
-                    {priorities.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
+                <div className="dp-field">
+                  <label className="dp-label">Priority</label>
+                  <select className="dp-input" value={n.priority} onChange={(e) => handleSelectChange(n.id, "priority", e.target.value)}>
+                    {priorities.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label style={labelStyle}>Budget</label>
-                  <input
-                    type="number"
-                    style={inputStyle}
-                    value={node.budget ?? ""}
-                    onChange={(e) => handleFieldChange(node.id, "budget", e.target.value ? Number(e.target.value) : null)}
-                    onBlur={(e) => handleFieldBlur(node.id, "budget", e.target.value ? Number(e.target.value) : null)}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Workstream</label>
-                  <input
-                    style={inputStyle}
-                    value={node.workstream ?? ""}
-                    onChange={(e) => handleFieldChange(node.id, "workstream", e.target.value)}
-                    onBlur={(e) => handleFieldBlur(node.id, "workstream", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Dates row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-                <div>
-                  <label style={labelStyle}>Start Date</label>
-                  <input
-                    type="date"
-                    style={inputStyle}
-                    value={node.startDate ?? ""}
+                <div className="dp-field">
+                  <label className="dp-label">Owner</label>
+                  <input className="dp-input" value={raciData.responsible}
                     onChange={(e) => {
-                      const val = e.target.value || null;
-                      handleFieldChange(node.id, "startDate", val);
-                      patchNode(node.id, "startDate", val);
+                      const next = { ...raciData, responsible: e.target.value };
+                      handleFieldChange(n.id, "raci", JSON.stringify(next));
+                    }}
+                    onBlur={(e) => {
+                      const next = { ...raciData, responsible: e.target.value };
+                      handleFieldBlur(n.id, "raci", JSON.stringify(next));
                     }}
                   />
                 </div>
-                <div>
-                  <label style={labelStyle}>End Date</label>
-                  <input
-                    type="date"
-                    style={inputStyle}
-                    value={node.endDate ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value || null;
-                      handleFieldChange(node.id, "endDate", val);
-                      patchNode(node.id, "endDate", val);
-                    }}
+                <div className="dp-field">
+                  <label className="dp-label">Budget</label>
+                  <input type="number" className="dp-input" value={n.budget ?? ""}
+                    onChange={(e) => handleFieldChange(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
+                    onBlur={(e) => handleFieldBlur(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
                   />
                 </div>
               </div>
-
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={btnStyle} onClick={() => onNavigateToNode(node.id)}>
-                  VIEW IN GRAPH
-                </button>
-                <button style={{ ...btnStyle, background: "#dc2626" }} onClick={() => handleDelete(node.id)}>
-                  DELETE
-                </button>
+              <div className="board-card-fields" style={{ marginTop: 8 }}>
+                <div className="dp-field">
+                  <label className="dp-label">Start</label>
+                  <input type="date" className="dp-input" value={n.startDate ?? ""}
+                    onChange={(e) => { handleFieldChange(n.id, "startDate", e.target.value || null); patchNode(n.id, "startDate", e.target.value || null); }}
+                  />
+                </div>
+                <div className="dp-field">
+                  <label className="dp-label">End</label>
+                  <input type="date" className="dp-input" value={n.endDate ?? ""}
+                    onChange={(e) => { handleFieldChange(n.id, "endDate", e.target.value || null); patchNode(n.id, "endDate", e.target.value || null); }}
+                  />
+                </div>
+                <div className="dp-field">
+                  <label className="dp-label">Workstream</label>
+                  <input className="dp-input" value={n.workstream ?? ""}
+                    onChange={(e) => handleFieldChange(n.id, "workstream", e.target.value)}
+                    onBlur={(e) => handleFieldBlur(n.id, "workstream", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn" style={{ fontSize: 8 }} onClick={() => onNavigateToNode(n.id)}>VIEW IN GRAPH</button>
+                <button className="btn danger" style={{ fontSize: 8 }} onClick={() => { handleDelete(n.id); setBoardExpanded(null); }}>DELETE</button>
               </div>
             </div>
           )}
@@ -394,271 +304,122 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     );
   }
 
-  function renderAddRow(sectionKey: string, workstream: string, clusterId?: string) {
+  function renderAddRow(workstream: string, clusterId?: string) {
+    const key = clusterId ? `${workstream}/${clusterId}` : workstream;
     if (onAddNode) {
       return (
-        <div style={addRowStyle} onClick={() => onAddNode(workstream, clusterId)}>
+        <div className="board-add-row" onClick={() => onAddNode(workstream, clusterId)}>
           <span style={{ color: "#BBB", fontWeight: 600, fontSize: 14 }}>+</span>
           <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>Add item</span>
         </div>
       );
     }
-    if (addingIn === sectionKey) {
-      return (
-        <div style={addRowActiveStyle}>
-          <span style={{ color: "#B81917", fontWeight: 600, fontSize: 14 }}>+</span>
-          <input
-            autoFocus
-            style={{ flex: 1, ...inputStyle, fontSize: 12 }}
-            placeholder="New item name..."
-            value={addLabel}
-            onChange={(e) => setAddLabel(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleAddNode(workstream, clusterId);
-              if (e.key === "Escape") { setAddingIn(null); setAddLabel(""); }
-            }}
-          />
-          <button style={{ ...btnStyle, padding: "4px 10px", fontSize: 8 }} onClick={() => handleAddNode(workstream, clusterId)}>
-            ADD
-          </button>
-          <button style={{ ...btnStyle, padding: "4px 10px", fontSize: 8, background: "#414042" }} onClick={() => { setAddingIn(null); setAddLabel(""); }}>
-            ESC
-          </button>
-        </div>
-      );
-    }
-    return (
-      <div style={addRowStyle} onClick={() => { setAddingIn(sectionKey); setAddLabel(""); }}>
+    return boardAddGroup === key ? (
+      <div className="board-add-row" style={{ borderStyle: "solid", borderColor: "#B81917" }}>
+        <span style={{ color: "#B81917", fontWeight: 600, fontSize: 14 }}>+</span>
+        <input
+          autoFocus
+          placeholder="New item name..."
+          value={boardAddLabel}
+          onChange={(e) => setBoardAddLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") boardAddNode(workstream, clusterId);
+            if (e.key === "Escape") { setBoardAddGroup(null); setBoardAddLabel(""); }
+          }}
+        />
+        <button className="btn primary" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => boardAddNode(workstream, clusterId)}>ADD</button>
+        <button className="btn" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</button>
+      </div>
+    ) : (
+      <div className="board-add-row" onClick={() => setBoardAddGroup(key)}>
         <span style={{ color: "#BBB", fontWeight: 600, fontSize: 14 }}>+</span>
         <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>Add item</span>
       </div>
     );
   }
 
-  // Workstream color — derive from a simple hash
-  function wsColor(ws: string): string {
-    const colors = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
-    let hash = 0;
-    for (let i = 0; i < ws.length; i++) hash = ((hash << 5) - hash + ws.charCodeAt(i)) | 0;
-    return colors[Math.abs(hash) % colors.length];
-  }
-
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", background: "#FAFAFA" }}>
+    <div className="board-wrap">
       {workstreams.length === 0 && (
         <div style={{ textAlign: "center", color: "#999", padding: 40 }}>
           No workstreams found. Add nodes with a workstream to see them here.
         </div>
       )}
       {workstreams.map((ws) => {
-        const color = wsColor(ws);
-        const wsNodes = leafNodes.filter((n) => n.workstream === ws);
-        const wsKey = `ws:${ws}`;
-        const isWsCollapsed = collapsedSections.has(wsKey);
-
-        // Clusters in this workstream
+        const color = wsColor(ws, workstreams);
+        const allGroupNodes = leafNodes.filter((n) => n.workstream === ws);
+        // Find clusters in this workstream
         const clusterIds = new Set<string>();
-        for (const n of wsNodes) {
+        for (const n of allGroupNodes) {
           const parent = parentMap.get(n.id);
           if (parent) clusterIds.add(parent);
         }
         const clusters = Array.from(clusterIds)
           .map((id) => nodes.find((n) => n.id === id))
           .filter(Boolean) as Node[];
-
-        // Ungrouped nodes (no parent_of edge)
-        const ungrouped = wsNodes.filter((n) => !parentMap.has(n.id));
+        const ungrouped = allGroupNodes.filter((n) => !parentMap.has(n.id));
+        const ungroupedKey = ws + "/_ungrouped";
 
         return (
-          <div key={ws} style={{ marginBottom: 24 }}>
-            {/* Workstream header */}
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 8 }}
-              onClick={() => toggleSection(wsKey)}
-            >
+          <div key={ws} className="board-group">
+            <div className="board-group-header">
               <div style={{ width: 12, height: 12, borderRadius: 2, background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color, letterSpacing: 0.5, fontFamily: "Tomorrow, sans-serif" }}>
-                {ws}
-              </span>
-              <span style={{ fontSize: 11, color: "#999" }}>{wsNodes.length} items</span>
-              <span style={{ fontSize: 10, color: "#999", marginLeft: 4 }}>{isWsCollapsed ? "\u25B6" : "\u25BC"}</span>
+              <div className="board-group-label" style={{ color }}>{ws}</div>
+              <div className="board-group-count">{allGroupNodes.length} items</div>
             </div>
-
-            {!isWsCollapsed && (
-              <div style={{ marginLeft: 4 }}>
-                {/* Cluster sub-groups */}
-                {clusters.map((cluster) => {
-                  const children = wsNodes.filter((n) => parentMap.get(n.id) === cluster.id);
-                  if (!children.length) return null;
-                  const subKey = `sub:${ws}/${cluster.id}`;
-                  const isSubCollapsed = collapsedSections.has(subKey);
-                  const clColor = priorityColor(cluster.priority) !== "#999" ? priorityColor(cluster.priority) : color;
-
-                  return (
-                    <div key={cluster.id} style={{ marginBottom: 12, borderLeft: `3px solid ${clColor}`, paddingLeft: 12 }}>
-                      {/* Sub-group header */}
-                      <div
-                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginBottom: 6 }}
-                        onClick={() => toggleSection(subKey)}
-                      >
-                        <span style={{ fontSize: 10, color: "#999" }}>{isSubCollapsed ? "\u25B6" : "\u25BC"}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: clColor }}>{cluster.name}</span>
-                        <span style={{ fontSize: 10, color: "#999", background: "#F0F0F0", borderRadius: 8, padding: "1px 6px" }}>
-                          {children.length}
-                        </span>
-                      </div>
-                      {!isSubCollapsed && (
-                        <div
-                          style={{
-                            display: "flex", flexDirection: "column", gap: 4,
-                            ...(dropTarget === subKey ? dropZoneHighlightStyle : {}),
-                          }}
-                          onDragOver={(e) => handleDragOver(e, subKey)}
-                          onDragLeave={(e) => handleDragLeave(e, subKey)}
-                          onDrop={(e) => handleDrop(e, ws, cluster.id)}
-                        >
-                          {children.map((n) => renderCard(n, cluster.id))}
-                          {renderAddRow(subKey, ws, cluster.id)}
-                        </div>
-                      )}
+            <div className="board-cards">
+              {clusters.map((cluster) => {
+                const children = allGroupNodes.filter((n) => parentMap.get(n.id) === cluster.id);
+                if (!children.length) return null;
+                const subKey = ws + "/" + cluster.id;
+                const isSubCol = boardCollapsed.has(subKey);
+                const orderedIds = getBoardOrder(subKey, children.map((n) => n.id));
+                const orderedChildren = orderedIds.map((id) => children.find((n) => n.id === id)).filter(Boolean) as Node[];
+                const clColor = priorityColor(cluster.priority) !== "#999" ? priorityColor(cluster.priority) : color;
+                return (
+                  <div key={cluster.id} className="board-subgroup">
+                    <div className="board-subgroup-header" onClick={() => toggleBoardSub(subKey)} style={{ borderLeftColor: clColor, borderLeftWidth: 3 }}>
+                      <div className="board-subgroup-toggle">{isSubCol ? "\u25B6" : "\u25BC"}</div>
+                      <div className="board-subgroup-label" style={{ color: clColor }}>{cluster.name}</div>
+                      <div className="board-subgroup-count">{children.length}</div>
                     </div>
-                  );
-                })}
-
-                {/* Ungrouped / Other */}
-                {ungrouped.length > 0 && clusters.length > 0 && (
-                  <div style={{ marginBottom: 12, borderLeft: "3px solid #999", paddingLeft: 12 }}>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginBottom: 6 }}
-                      onClick={() => toggleSection(`other:${ws}`)}
-                    >
-                      <span style={{ fontSize: 10, color: "#999" }}>{collapsedSections.has(`other:${ws}`) ? "\u25B6" : "\u25BC"}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#777" }}>Other</span>
-                      <span style={{ fontSize: 10, color: "#999", background: "#F0F0F0", borderRadius: 8, padding: "1px 6px" }}>
-                        {ungrouped.length}
-                      </span>
-                    </div>
-                    {!collapsedSections.has(`other:${ws}`) && (
-                      <div
-                        style={{
-                          display: "flex", flexDirection: "column", gap: 4,
-                          ...(dropTarget === `other:${ws}` ? dropZoneHighlightStyle : {}),
-                        }}
-                        onDragOver={(e) => handleDragOver(e, `other:${ws}`)}
-                        onDragLeave={(e) => handleDragLeave(e, `other:${ws}`)}
-                        onDrop={(e) => handleDrop(e, ws)}
-                      >
-                        {ungrouped.map((n) => renderCard(n))}
+                    {!isSubCol && (
+                      <div className="board-subgroup-cards">
+                        {orderedChildren.map((n) => renderCard(n, subKey, cluster.id))}
+                        {renderAddRow(ws, cluster.id)}
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* If no clusters, just list ungrouped directly */}
-                {clusters.length === 0 && (
-                  <div
-                    style={{
-                      display: "flex", flexDirection: "column", gap: 4,
-                      ...(dropTarget === wsKey ? dropZoneHighlightStyle : {}),
-                    }}
-                    onDragOver={(e) => handleDragOver(e, wsKey)}
-                    onDragLeave={(e) => handleDragLeave(e, wsKey)}
-                    onDrop={(e) => handleDrop(e, ws)}
-                  >
-                    {ungrouped.map((n) => renderCard(n))}
+                );
+              })}
+              {ungrouped.length > 0 && clusters.length > 0 && (
+                <div className="board-subgroup">
+                  <div className="board-subgroup-header" onClick={() => toggleBoardSub(ungroupedKey)} style={{ borderLeftColor: "#999", borderLeftWidth: 3 }}>
+                    <div className="board-subgroup-toggle">{boardCollapsed.has(ungroupedKey) ? "\u25B6" : "\u25BC"}</div>
+                    <div className="board-subgroup-label" style={{ color: "#777" }}>Other</div>
+                    <div className="board-subgroup-count">{ungrouped.length}</div>
                   </div>
-                )}
-
-                {/* Add row at workstream level */}
-                {renderAddRow(wsKey, ws)}
-              </div>
-            )}
+                  {!boardCollapsed.has(ungroupedKey) && (
+                    <div className="board-subgroup-cards">
+                      {getBoardOrder(ungroupedKey, ungrouped.map((n) => n.id)).map((id) => {
+                        const n = ungrouped.find((nd) => nd.id === id);
+                        return n ? renderCard(n, ungroupedKey) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {ungrouped.length > 0 && clusters.length === 0 &&
+                getBoardOrder(ungroupedKey, ungrouped.map((n) => n.id)).map((id) => {
+                  const n = ungrouped.find((nd) => nd.id === id);
+                  return n ? renderCard(n, ungroupedKey) : null;
+                })
+              }
+              {renderAddRow(ws)}
+            </div>
           </div>
         );
       })}
     </div>
   );
 }
-
-// --- Styles ---
-
-const chipStyle: React.CSSProperties = {
-  padding: "2px 8px",
-  borderRadius: 3,
-  fontSize: 10,
-  fontWeight: 600,
-  letterSpacing: "0.5px",
-  whiteSpace: "nowrap",
-};
-
-const cardStyle: React.CSSProperties = {
-  display: "flex",
-  background: "#fff",
-  borderRadius: 6,
-  border: "1px solid #E7E7E7",
-  overflow: "hidden",
-  transition: "box-shadow 0.15s",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "6px 8px",
-  background: "#FAFAFA",
-  border: "1px solid #E7E7E7",
-  borderRadius: 4,
-  fontFamily: "Tomorrow, sans-serif",
-  fontSize: 11,
-  color: "#1A1A1A",
-  outline: "none",
-  width: "100%",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 10,
-  color: "#999",
-  letterSpacing: 0.5,
-  display: "block",
-  marginBottom: 2,
-  textTransform: "uppercase",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "6px 12px",
-  background: "#B81917",
-  color: "#fff",
-  border: "none",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 9,
-  fontWeight: 600,
-  fontFamily: "Tomorrow, sans-serif",
-  letterSpacing: 0.5,
-};
-
-const addRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "8px 12px",
-  border: "1px dashed #DDD",
-  borderRadius: 6,
-  cursor: "pointer",
-  marginTop: 4,
-};
-
-const addRowActiveStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "8px 12px",
-  border: "1px solid #B81917",
-  borderRadius: 6,
-  marginTop: 4,
-};
-
-const dropZoneHighlightStyle: React.CSSProperties = {
-  background: "rgba(184, 25, 23, 0.06)",
-  borderRadius: 6,
-  outline: "2px dashed #B81917",
-  outlineOffset: 2,
-  transition: "background 0.15s, outline 0.15s",
-};

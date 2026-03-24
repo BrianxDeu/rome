@@ -6,14 +6,15 @@ import {
   STATUSES,
   PRIORITIES,
   EDGE_TYPES,
-  statusLabel,
-  statusColor,
   priorityColor,
+  statusColor,
+  statusLabel,
   parseRaci,
 } from "../constants";
 
 const statuses = Object.keys(STATUSES);
 const priorities = Object.keys(PRIORITIES);
+const edgeTypes = Object.keys(EDGE_TYPES).filter((t) => t !== "parent_of");
 
 export function NodePanel() {
   const selectedNode = useGraphStore((s) => s.selectedNode);
@@ -28,14 +29,12 @@ export function NodePanel() {
   const [form, setForm] = useState<Partial<Node>>({});
   const [raci, setRaci] = useState({ responsible: "", accountable: "", consulted: "", informed: "" });
   const [dirty, setDirty] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   useEffect(() => {
     if (selectedNode) {
       setForm({ ...selectedNode });
       setRaci(parseRaci(selectedNode.raci));
       setDirty(false);
-      setSaveStatus("idle");
     }
   }, [selectedNode]);
 
@@ -69,7 +68,6 @@ export function NodePanel() {
     setForm((prev) => ({ ...prev, [field]: value }));
     updateNode(selectedNode!.id, { [field]: value } as Partial<Node>);
     setDirty(true);
-    setSaveStatus("idle");
   }
 
   function setRaciField(field: keyof typeof raci, value: string) {
@@ -79,11 +77,9 @@ export function NodePanel() {
     setForm((prev) => ({ ...prev, raci: raciJson }));
     updateNode(selectedNode!.id, { raci: raciJson });
     setDirty(true);
-    setSaveStatus("idle");
   }
 
   async function saveAll() {
-    setSaveStatus("saving");
     try {
       const raciJson = JSON.stringify(raci);
       const body: Record<string, unknown> = {
@@ -103,9 +99,8 @@ export function NodePanel() {
         body: JSON.stringify(body),
       });
       setDirty(false);
-      setSaveStatus("saved");
     } catch {
-      setSaveStatus("idle");
+      // handled by api()
     }
   }
 
@@ -114,9 +109,7 @@ export function NodePanel() {
       await api(`/nodes/${selectedNode!.id}`, { method: "DELETE" });
       removeNode(selectedNode!.id);
       selectNode(null);
-    } catch {
-      // handled by api()
-    }
+    } catch {}
   }
 
   async function handleAddEdge(targetId: string, direction: "incoming" | "outgoing") {
@@ -125,198 +118,154 @@ export function NodePanel() {
     try {
       const edge = await api<Edge>("/edges", {
         method: "POST",
-        body: JSON.stringify({ source_id: sourceId, target_id: tgtId, type: "blocks" }),
+        body: JSON.stringify({ source_id: sourceId, target_id: tgtId, type: "blocker" }),
       });
       addEdge(edge);
-    } catch {
-      // handled by api()
-    }
+    } catch {}
   }
 
   async function handleRemoveEdge(edgeId: string) {
     try {
       await api(`/edges/${edgeId}`, { method: "DELETE" });
       removeEdge(edgeId);
-    } catch {
-      // handled by api()
-    }
+    } catch {}
+  }
+
+  async function handleEdgeTypeChange(edgeId: string, newType: string) {
+    try {
+      await api(`/edges/${edgeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ type: newType }),
+      });
+      // Update edge in store
+      const edge = edges.find((e) => e.id === edgeId);
+      if (edge) {
+        removeEdge(edgeId);
+        addEdge({ ...edge, type: newType });
+      }
+    } catch {}
   }
 
   function nodeName(id: string): string {
     return nodes.find((n) => n.id === id)?.name ?? id;
   }
 
-  return (
-    <aside style={panelStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{form.name || "Node Details"}</h3>
-        <button onClick={() => selectNode(null)} style={closeBtnStyle}>x</button>
-      </div>
+  const pColor = priorityColor(form.priority ?? "P2");
+  const sColor = statusColor(form.status ?? "not_started");
 
-      {/* Status + Priority chips */}
-      <div style={{ display: "flex", gap: 6 }}>
-        <span style={{ ...chipStyle, background: statusColor(form.status ?? "not_started"), color: "#fff" }}>
+  return (
+    <div className="detail-panel">
+      <div className="dp-header">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="dp-title">{form.name}</div>
+          <button className="btn" style={{ fontSize: 14, padding: "2px 8px", lineHeight: 1 }} onClick={() => selectNode(null)}>x</button>
+        </div>
+        <span className="dp-badge" style={{ background: pColor + "18", color: pColor }}>{form.priority}</span>
+        <span className="dp-badge" style={{ marginLeft: 4, background: sColor + "18", color: sColor }}>
           {statusLabel(form.status ?? "not_started")}
         </span>
-        <span style={{ ...chipStyle, background: priorityColor(form.priority ?? "P2"), color: "#fff" }}>
-          {form.priority ?? "P2"}
-        </span>
       </div>
-
-      <Field label="Name">
-        <input style={inputStyle} value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
-      </Field>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <Field label="Status" flex>
-          <select style={inputStyle} value={form.status ?? "not_started"} onChange={(e) => set("status", e.target.value)}>
+      <div className="dp-body">
+        <div className="dp-field">
+          <label className="dp-label">Status</label>
+          <select className="dp-input" value={form.status ?? "not_started"} onChange={(e) => set("status", e.target.value)}>
             {statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
-        </Field>
-        <Field label="Priority" flex>
-          <select style={inputStyle} value={form.priority ?? "P2"} onChange={(e) => set("priority", e.target.value)}>
-            {priorities.map((p) => <option key={p} value={p}>{p} — {PRIORITIES[p]?.label}</option>)}
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Priority</label>
+          <select className="dp-input" value={form.priority ?? "P2"} onChange={(e) => set("priority", e.target.value)}>
+            {priorities.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-        </Field>
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Workstream</label>
+          <input className="dp-input" value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
+        </div>
+        <div className="dp-row">
+          <div className="dp-field">
+            <label className="dp-label">Start</label>
+            <input type="date" className="dp-input" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
+          </div>
+          <div className="dp-field">
+            <label className="dp-label">End</label>
+            <input type="date" className="dp-input" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
+          </div>
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Budget ($)</label>
+          <input type="number" className="dp-input" value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Deliverables</label>
+          <textarea className="dp-textarea" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Notes</label>
+          <textarea className="dp-textarea" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">RACI</label>
+          <div className="dp-row">
+            <div><label className="dp-label" style={{ fontSize: 7 }}>R</label><input className="dp-input" value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} /></div>
+            <div><label className="dp-label" style={{ fontSize: 7 }}>A</label><input className="dp-input" value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} /></div>
+          </div>
+          <div className="dp-row" style={{ marginTop: 4 }}>
+            <div><label className="dp-label" style={{ fontSize: 7 }}>C</label><input className="dp-input" value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} /></div>
+            <div><label className="dp-label" style={{ fontSize: 7 }}>I</label><input className="dp-input" value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} /></div>
+          </div>
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">This depends on (incoming)</label>
+          {incomingEdges.map((e) => (
+            <div key={e.id} className="dp-dep">
+              <span style={{ flex: 1 }}>{nodeName(e.sourceId)}</span>
+              <select
+                style={{ fontSize: 8, padding: "2px 4px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginRight: 4 }}
+                value={e.type}
+                onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
+              >
+                {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button onClick={() => handleRemoveEdge(e.id)}>x</button>
+            </div>
+          ))}
+          <div style={{ marginTop: 6 }}>
+            <select className="dp-input" style={{ fontSize: 10 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "incoming"); }}>
+              <option value="">+ Add dependency...</option>
+              {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="dp-field">
+          <label className="dp-label">Blocks / feeds into (outgoing)</label>
+          {outgoingEdges.map((e) => (
+            <div key={e.id} className="dp-dep">
+              <span style={{ flex: 1 }}>{nodeName(e.targetId)}</span>
+              <select
+                style={{ fontSize: 8, padding: "2px 4px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginRight: 4 }}
+                value={e.type}
+                onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
+              >
+                {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button onClick={() => handleRemoveEdge(e.id)}>x</button>
+            </div>
+          ))}
+          <div style={{ marginTop: 6 }}>
+            <select className="dp-input" style={{ fontSize: 10 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "outgoing"); }}>
+              <option value="">+ Add outgoing...</option>
+              {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          {dirty && (
+            <button className="btn primary" style={{ flex: 1 }} onClick={saveAll}>SAVE</button>
+          )}
+          <button className="btn danger" style={{ width: "100%" }} onClick={handleDelete}>DELETE NODE</button>
+        </div>
       </div>
-
-      <Field label="Workstream">
-        <input style={inputStyle} value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
-      </Field>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <Field label="Start Date" flex>
-          <input type="date" style={inputStyle} value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
-        </Field>
-        <Field label="End Date" flex>
-          <input type="date" style={inputStyle} value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
-        </Field>
-      </div>
-
-      <Field label="Budget (USD)">
-        <input type="number" style={inputStyle} value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
-      </Field>
-
-      <Field label="Deliverable">
-        <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
-      </Field>
-
-      <Field label="Notes">
-        <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
-      </Field>
-
-      {/* RACI — 4 separate fields */}
-      <div style={{ fontSize: 12, color: "var(--rome-text-muted)", fontWeight: 600, marginTop: 4 }}>RACI</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        <Field label="Responsible">
-          <input style={inputStyle} value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} />
-        </Field>
-        <Field label="Accountable">
-          <input style={inputStyle} value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} />
-        </Field>
-        <Field label="Consulted">
-          <input style={inputStyle} value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} />
-        </Field>
-        <Field label="Informed">
-          <input style={inputStyle} value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} />
-        </Field>
-      </div>
-
-      {/* Dependencies — Incoming */}
-      <DepSection title="This depends on">
-        {incomingEdges.map((e) => (
-          <EdgeRow key={e.id} label={nodeName(e.sourceId)} edgeType={e.type} onRemove={() => handleRemoveEdge(e.id)} />
-        ))}
-        {availableNodes.length > 0 && (
-          <select style={{ ...inputStyle, fontSize: 12, marginTop: 4 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "incoming"); }}>
-            <option value="">+ Add dependency...</option>
-            {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-          </select>
-        )}
-      </DepSection>
-
-      {/* Dependencies — Outgoing */}
-      <DepSection title="Blocks / feeds into">
-        {outgoingEdges.map((e) => (
-          <EdgeRow key={e.id} label={nodeName(e.targetId)} edgeType={e.type} onRemove={() => handleRemoveEdge(e.id)} />
-        ))}
-        {availableNodes.length > 0 && (
-          <select style={{ ...inputStyle, fontSize: 12, marginTop: 4 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "outgoing"); }}>
-            <option value="">+ Add outgoing...</option>
-            {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-          </select>
-        )}
-      </DepSection>
-
-      {/* Save + Delete */}
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button onClick={saveAll} disabled={saveStatus === "saving"} style={{
-          flex: 1, padding: 8,
-          background: dirty ? "#16a34a" : saveStatus === "saved" ? "#16a34a" : "#414042",
-          color: "#fff", border: "none", borderRadius: 4,
-          cursor: saveStatus === "saving" ? "wait" : "pointer",
-          fontWeight: 600, fontFamily: "Tomorrow, sans-serif",
-          opacity: saveStatus === "saving" ? 0.7 : 1,
-        }}>
-          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" && !dirty ? "Saved" : "Save"}
-        </button>
-        <button onClick={handleDelete} style={{
-          padding: 8, background: "#dc2626", color: "#fff",
-          border: "none", borderRadius: 4, cursor: "pointer",
-          fontWeight: 600, fontFamily: "Tomorrow, sans-serif",
-        }}>
-          Delete
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-function Field({ label, children, flex }: { label: string; children: React.ReactNode; flex?: boolean }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--rome-text-muted)", ...(flex ? { flex: 1 } : {}) }}>
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function DepSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 12, color: "var(--rome-text-muted)", fontWeight: 600, marginBottom: 4 }}>{title}</div>
-      {children}
     </div>
   );
 }
-
-function EdgeRow({ label, edgeType, onRemove }: { label: string; edgeType: string; onRemove: () => void }) {
-  const info = EDGE_TYPES[edgeType];
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 13 }}>
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: info?.color ?? "#999", flexShrink: 0 }} />
-      <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 10, color: "var(--rome-text-muted)", textTransform: "uppercase" }}>{info?.label ?? edgeType}</span>
-      <button onClick={onRemove} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, padding: 0 }}>x</button>
-    </div>
-  );
-}
-
-const panelStyle: React.CSSProperties = {
-  width: 360, borderLeft: "1px solid var(--rome-border)", background: "var(--rome-surface)",
-  padding: 16, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "8px 10px", background: "#fff", border: "1px solid var(--rome-border)",
-  borderRadius: 4, color: "var(--rome-text)", outline: "none", fontSize: 14,
-  fontFamily: "Tomorrow, sans-serif", width: "100%",
-};
-
-const chipStyle: React.CSSProperties = {
-  padding: "2px 8px", borderRadius: 3, fontSize: 11, fontWeight: 600, letterSpacing: "0.5px",
-};
-
-const closeBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", color: "var(--rome-text-muted)", fontSize: 20, cursor: "pointer",
-};
