@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
 import { NodePanel } from "./components/NodePanel";
+import { AddNodeModal } from "./components/AddNodeModal";
+import { AddWorkstreamModal } from "./components/AddWorkstreamModal";
 import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
@@ -9,8 +11,16 @@ import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
 
+interface AddNodeModalState {
+  open: boolean;
+  defaultWorkstream?: string;
+  defaultClusterId?: string;
+}
+
 export function Shell() {
   const [activeView, setActiveView] = useState<ViewTab>("board");
+  const [addNodeModal, setAddNodeModal] = useState<AddNodeModalState>({ open: false });
+  const [addWorkstreamModal, setAddWorkstreamModal] = useState(false);
   const selectedNode = useGraphStore((s) => s.selectedNode);
   const nodes = useGraphStore((s) => s.nodes);
   const selectNode = useGraphStore((s) => s.selectNode);
@@ -26,12 +36,24 @@ export function Shell() {
     [nodes, selectNode],
   );
 
+  const handleOpenAddNode = useCallback(
+    (defaultWorkstream?: string, defaultClusterId?: string) => {
+      setAddNodeModal({ open: true, defaultWorkstream, defaultClusterId });
+    },
+    [],
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <TopBar activeView={activeView} onViewChange={setActiveView} />
+      <TopBar
+        activeView={activeView}
+        onViewChange={setActiveView}
+        onAddNode={() => handleOpenAddNode()}
+        onAddWorkstream={() => setAddWorkstreamModal(true)}
+      />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {activeView === "board" ? (
-          <BoardView onNavigateToNode={handleNavigateToNode} />
+          <BoardView onNavigateToNode={handleNavigateToNode} onAddNode={handleOpenAddNode} />
         ) : activeView === "budget" ? (
           <BudgetView onNavigateToNode={handleNavigateToNode} />
         ) : activeView === "gantt" ? (
@@ -41,6 +63,17 @@ export function Shell() {
         )}
         {selectedNode && activeView !== "board" && <NodePanel />}
       </div>
+
+      {addNodeModal.open && (
+        <AddNodeModal
+          defaultWorkstream={addNodeModal.defaultWorkstream}
+          defaultClusterId={addNodeModal.defaultClusterId}
+          onClose={() => setAddNodeModal({ open: false })}
+        />
+      )}
+      {addWorkstreamModal && (
+        <AddWorkstreamModal onClose={() => setAddWorkstreamModal(false)} />
+      )}
     </div>
   );
 }

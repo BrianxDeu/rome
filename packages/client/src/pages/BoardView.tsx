@@ -18,9 +18,10 @@ const priorities = Object.keys(PRIORITIES);
 
 interface BoardViewProps {
   onNavigateToNode: (nodeId: string) => void;
+  onAddNode?: (defaultWorkstream?: string, defaultClusterId?: string) => void;
 }
 
-export function BoardView({ onNavigateToNode }: BoardViewProps) {
+export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const updateNode = useGraphStore((s) => s.updateNode);
@@ -287,6 +288,14 @@ export function BoardView({ onNavigateToNode }: BoardViewProps) {
   }
 
   function renderAddRow(sectionKey: string, workstream: string, clusterId?: string) {
+    if (onAddNode) {
+      return (
+        <div style={addRowStyle} onClick={() => onAddNode(workstream, clusterId)}>
+          <span style={{ color: "#BBB", fontWeight: 600, fontSize: 14 }}>+</span>
+          <span style={{ color: "#BBB", fontSize: 10, letterSpacing: 1 }}>Add item</span>
+        </div>
+      );
+    }
     if (addingIn === sectionKey) {
       return (
         <div style={addRowActiveStyle}>

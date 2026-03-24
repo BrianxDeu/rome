@@ -6,6 +6,8 @@ export type ViewTab = "graph" | "board" | "gantt" | "budget";
 interface TopBarProps {
   activeView: ViewTab;
   onViewChange: (view: ViewTab) => void;
+  onAddNode?: () => void;
+  onAddWorkstream?: () => void;
 }
 
 const tabs: { id: ViewTab; label: string }[] = [
@@ -15,7 +17,7 @@ const tabs: { id: ViewTab; label: string }[] = [
   { id: "budget", label: "Budget" },
 ];
 
-export function TopBar({ activeView, onViewChange }: TopBarProps) {
+export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [shareOpen, setShareOpen] = useState(false);
@@ -58,6 +60,19 @@ export function TopBar({ activeView, onViewChange }: TopBarProps) {
           </button>
         ))}
       </nav>
+
+      <div style={styles.actions}>
+        {onAddNode && (
+          <button style={styles.addBtn} onClick={onAddNode} title="Add Node">
+            + Node
+          </button>
+        )}
+        {onAddWorkstream && (
+          <button style={styles.addBtn} onClick={onAddWorkstream} title="Add Workstream">
+            + Stream
+          </button>
+        )}
+      </div>
 
       <div style={styles.user}>
         <div style={{ position: "relative" }} ref={popoverRef}>
@@ -130,6 +145,22 @@ const styles: Record<string, React.CSSProperties> = {
   tabActive: {
     background: "var(--rome-red)",
     color: "#FFFFFF",
+  },
+  actions: {
+    display: "flex",
+    gap: "6px",
+  },
+  addBtn: {
+    padding: "4px 12px",
+    background: "var(--rome-red)",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontSize: "12px",
+    fontWeight: 600,
+    fontFamily: "Tomorrow, sans-serif",
+    letterSpacing: "0.3px",
   },
   user: {
     display: "flex",
