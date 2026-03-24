@@ -19,10 +19,10 @@ export function NodePanel() {
       await api(`/nodes/${node.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          title: node.title,
-          body: node.body,
-          type: node.type,
+          name: node.name,
+          notes: node.notes,
           status: node.status,
+          workstream: node.workstream,
         }),
       });
     } catch {
@@ -40,35 +40,30 @@ export function NodePanel() {
       </div>
 
       <label style={styles.label}>
-        Title
+        Name
         <input
           style={styles.input}
-          value={selectedNode.title}
-          onChange={(e) => handleChange("title", e.target.value)}
+          value={selectedNode.name}
+          onChange={(e) => handleChange("name", e.target.value)}
         />
       </label>
 
       <label style={styles.label}>
-        Body
+        Notes
         <textarea
           style={{ ...styles.input, minHeight: "80px", resize: "vertical" }}
-          value={selectedNode.body}
-          onChange={(e) => handleChange("body", e.target.value)}
+          value={selectedNode.notes ?? ""}
+          onChange={(e) => handleChange("notes", e.target.value)}
         />
       </label>
 
       <label style={styles.label}>
-        Type
-        <select
+        Workstream
+        <input
           style={styles.input}
-          value={selectedNode.type}
-          onChange={(e) => handleChange("type", e.target.value)}
-        >
-          <option value="default">Default</option>
-          <option value="task">Task</option>
-          <option value="milestone">Milestone</option>
-          <option value="workstream">Workstream</option>
-        </select>
+          value={selectedNode.workstream ?? ""}
+          onChange={(e) => handleChange("workstream", e.target.value)}
+        />
       </label>
 
       <label style={styles.label}>
