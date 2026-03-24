@@ -31,8 +31,8 @@ const statusOrder: Record<string, number> = {
   in_progress: 0,
   not_started: 1,
   blocked: 2,
-  completed: 3,
-  deferred: 4,
+  done: 3,
+  cancelled: 4,
 };
 
 function formatCurrency(value: number): string {

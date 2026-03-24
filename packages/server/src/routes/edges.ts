@@ -114,10 +114,9 @@ export function edgeRoutes(db: Db): Router {
       })
       .run();
 
-    const edge = db.select().from(edges).where(eq(edges.id, id)).get();
-    const edgeJson = toEdgeJson(edge!);
-    broadcast({ type: "edge:created", payload: edgeJson as unknown as Record<string, unknown> });
-    res.status(201).json(edgeJson);
+    const edge = db.select().from(edges).where(eq(edges.id, id)).get()!;
+    broadcast({ type: "edge:created", payload: edge as unknown as Record<string, unknown> });
+    res.status(201).json(toEdgeJson(edge));
   });
 
   router.delete("/:id", (req, res) => {

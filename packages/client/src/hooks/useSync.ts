@@ -1,56 +1,45 @@
 import { useEffect, useRef } from "react";
+import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "../stores/authStore";
 import { useGraphStore } from "../stores/graphStore";
 import type { Node, Edge } from "@rome/shared";
 
-interface Delta {
-  type: "node:create" | "node:update" | "node:delete" | "edge:create" | "edge:delete";
-  payload: Record<string, unknown>;
-}
-
 export function useSync() {
   const token = useAuthStore((s) => s.token);
-  const wsRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!token) return;
 
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`);
-    wsRef.current = ws;
+    const socket = io({
+      auth: { token },
+    });
+    socketRef.current = socket;
 
-    ws.onmessage = (event) => {
-      const delta: Delta = JSON.parse(event.data);
-      const store = useGraphStore.getState();
+    socket.on("node:created", (payload: Node) => {
+      useGraphStore.getState().addNode(payload);
+    });
 
-      switch (delta.type) {
-        case "node:create":
-          store.addNode(delta.payload as unknown as Node);
-          break;
-        case "node:update": {
-          const { id, ...patch } = delta.payload as { id: string } & Partial<Node>;
-          store.updateNode(id, patch);
-          break;
-        }
-        case "node:delete":
-          store.removeNode(delta.payload.id as string);
-          break;
-        case "edge:create":
-          store.addEdge(delta.payload as unknown as Edge);
-          break;
-        case "edge:delete":
-          store.removeEdge(delta.payload.id as string);
-          break;
-      }
-    };
+    socket.on("node:updated", (payload: { id: string } & Partial<Node>) => {
+      const { id, ...patch } = payload;
+      useGraphStore.getState().updateNode(id, patch);
+    });
 
-    ws.onclose = () => {
-      wsRef.current = null;
-    };
+    socket.on("node:deleted", (payload: { id: string }) => {
+      useGraphStore.getState().removeNode(payload.id);
+    });
+
+    socket.on("edge:created", (payload: Edge) => {
+      useGraphStore.getState().addEdge(payload);
+    });
+
+    socket.on("edge:deleted", (payload: { id: string }) => {
+      useGraphStore.getState().removeEdge(payload.id);
+    });
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      socket.disconnect();
+      socketRef.current = null;
     };
   }, [token]);
 }

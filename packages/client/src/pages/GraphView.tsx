@@ -69,7 +69,7 @@ function FilterBar() {
         <option value="cancelled">Cancelled</option>
       </select>
       {workstreams.length > 0 && (
-        <select value={(filters as any).workstream ?? ""} onChange={(e) => setFilter("type" as any, e.target.value || null)} style={sel}>
+        <select value={filters.workstream ?? ""} onChange={(e) => setFilter("workstream", e.target.value || null)} style={sel}>
           <option value="">All workstreams</option>
           {workstreams.map((w) => <option key={w} value={w}>{w}</option>)}
         </select>
@@ -177,7 +177,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const storeEdges = useGraphStore((s) => s.edges);
   const selectNode = useGraphStore((s) => s.selectNode);
   const filters = useGraphStore((s) => s.filters);
-  const hasActiveFilter = filters.status || filters.type || filters.responsible;
+  const hasActiveFilter = filters.status || filters.workstream || filters.responsible;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -254,7 +254,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const onNodeDragStop = useCallback(async (_: any, node: FlowNode) => {
     await api(`/nodes/${node.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ x: node.position.x, y: node.position.y, positionPinned: 1 }),
+      body: JSON.stringify({ x: node.position.x, y: node.position.y, position_pinned: true }),
     });
   }, []);
 
@@ -277,7 +277,8 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   );
 }
 
-function matchesFilter(node: Node, filters: { status: string | null }) {
+function matchesFilter(node: Node, filters: { status: string | null; workstream: string | null }) {
   if (filters.status && node.status !== filters.status) return false;
+  if (filters.workstream && node.workstream !== filters.workstream) return false;
   return true;
 }

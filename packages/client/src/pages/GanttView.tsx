@@ -12,8 +12,8 @@ const STATUS_COLORS: Record<string, string> = {
   not_started: "#6b7280",
   in_progress: "#3b82f6",
   blocked: "#f59e0b",
-  completed: "#22c55e",
-  deferred: "#a855f7",
+  done: "#22c55e",
+  cancelled: "#a855f7",
 };
 
 const BAR_HEIGHT = 24;
@@ -283,7 +283,7 @@ export function GanttView({ onNavigateToNode }: GanttViewProps) {
 
   const isOverdue = (row: RowData): boolean => {
     if (!row.endDate) return false;
-    return row.node.status !== "completed" && row.endDate < today;
+    return row.node.status !== "done" && row.endDate < today;
   };
 
   const chartHeight = scheduled.length * ROW_HEIGHT;
@@ -425,7 +425,7 @@ export function GanttView({ onNavigateToNode }: GanttViewProps) {
                       background: barColor,
                       borderRadius: 4,
                       cursor: "pointer",
-                      opacity: row.node.status === "completed" ? 0.6 : 1,
+                      opacity: row.node.status === "done" ? 0.6 : 1,
                       border: overdue ? "2px solid #dc2626" : "none",
                       boxSizing: "border-box",
                       display: "flex",

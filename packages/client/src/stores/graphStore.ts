@@ -3,7 +3,7 @@ import type { Node, Edge } from "@rome/shared";
 
 interface Filters {
   status: string | null;
-  type: string | null;
+  workstream: string | null;
   responsible: string | null;
 }
 
@@ -27,7 +27,7 @@ export const useGraphStore = create<GraphState>((set) => ({
   nodes: [],
   edges: [],
   selectedNode: null,
-  filters: { status: null, type: null, responsible: null },
+  filters: { status: null, workstream: null, responsible: null },
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
