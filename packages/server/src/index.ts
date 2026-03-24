@@ -5,7 +5,8 @@ import { setupSocket } from "./socket.js";
 
 const PORT = parseInt(process.env["PORT"] || "3000", 10);
 
-const { db, sqlite } = createDb();
+const dbPath = process.env["DATABASE_PATH"] || "rome.db";
+const { db, sqlite } = createDb(dbPath);
 initTables(sqlite);
 
 const app = createApp(db);
