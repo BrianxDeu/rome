@@ -11,8 +11,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Push to BrianxDeu/rome
+        env:
+          COMPANY_TOKEN: ${{ secrets.COMPANY_REPO_TOKEN }}
         run: |
-          git remote add company https://x-access-token:${{ secrets.COMPANY_REPO_TOKEN }}@github.com/BrianxDeu/rome.git
-          git push company main --force
+          git config --unset-all http.https://github.com/.extraheader || true
+          git push --force https://x-access-token:${COMPANY_TOKEN}@github.com/BrianxDeu/rome.git HEAD:main
