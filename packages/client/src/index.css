@@ -112,7 +112,7 @@ a {
 .dp-badge { font-size:9px; letter-spacing:1px; text-transform:uppercase; padding:2px 8px; border-radius:2px; display:inline-block; }
 .dp-body { padding:16px 20px; }
 .dp-field { margin-bottom:14px; }
-.dp-label { font-size:8px; letter-spacing:1.2px; text-transform:uppercase; color:#999; margin-bottom:4px; display:block; }
+.dp-label { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#999; margin-bottom:4px; display:block; }
 .dp-input { width:100%; padding:7px 10px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; }
 .dp-input:focus { outline:none; border-color:#B81917; background:#FFF; }
 .dp-textarea { width:100%; padding:7px 10px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; min-height:70px; resize:vertical; }
@@ -133,7 +133,7 @@ a {
 .gantt-sidebar-item:hover { background:#F8F8F8; }
 .gantt-canvas-wrap { flex:1; overflow:auto; position:relative; }
 .gantt-header { display:flex; height:28px; border-bottom:1px solid #E7E7E7; position:sticky; top:0; background:#FFF; z-index:1; }
-.gantt-header-cell { font-size:8px; letter-spacing:1px; text-transform:uppercase; color:#999; border-right:1px solid #F0F0F0; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.gantt-header-cell { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#999; border-right:1px solid #F0F0F0; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .gantt-rows { position:relative; }
 .gantt-row { height:32px; border-bottom:1px solid #F5F5F5; position:relative; }
 .gantt-bar { position:absolute; height:20px; top:6px; border-radius:3px; cursor:pointer; display:flex; align-items:center; padding:0 6px; font-size:8px; color:#FFF; overflow:hidden; white-space:nowrap; min-width:4px; }
@@ -153,7 +153,7 @@ a {
 .budget-bar-fill { height:100%; border-radius:2px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px; font-size:8px; color:#FFF; min-width:0; }
 .budget-bar-amount { width:90px; font-size:10px; text-align:right; }
 .budget-table { width:100%; border-collapse:collapse; }
-.budget-table th { padding:8px; font-size:8px; letter-spacing:1px; text-transform:uppercase; background:#F8F8F8; text-align:left; border-bottom:1px solid #E7E7E7; cursor:pointer; user-select:none; }
+.budget-table th { padding:8px; font-size:10px; letter-spacing:1px; text-transform:uppercase; background:#F8F8F8; text-align:left; border-bottom:1px solid #E7E7E7; cursor:pointer; user-select:none; }
 .budget-table th:hover { background:#F0F0F0; }
 .budget-table td { padding:8px; font-size:10px; border-bottom:1px solid #F5F5F5; }
 .budget-table tr:hover { background:#FAFAFA; }
