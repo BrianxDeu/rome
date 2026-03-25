@@ -5,7 +5,8 @@ import { AddWorkstreamModal } from "./components/AddWorkstreamModal";
 import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
-// GraphView + NodePanel removed — Graph view disabled for rebuild
+import { GraphView } from "./pages/GraphView";
+import { NodePanel } from "./components/NodePanel";
 import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
@@ -24,12 +25,16 @@ export function Shell() {
   useGraph();
   useSync();
 
-  // handleNavigateToNode removed — Graph view disabled for rebuild
+  const selectedNode = useGraphStore((s) => s.selectedNode);
+
   const handleNavigateToNode = useCallback(
-    (_nodeId: string) => {
-      // no-op while graph is disabled
+    (nodeId: string) => {
+      setActiveView("graph");
+      const nodes = useGraphStore.getState().nodes;
+      const node = nodes.find((n) => n.id === nodeId) ?? null;
+      selectNode(node);
     },
-    [],
+    [selectNode],
   );
 
   const handleOpenAddNode = useCallback(
@@ -43,7 +48,7 @@ export function Shell() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar
         activeView={activeView}
-        onViewChange={(v) => { setActiveView(v); if (v === "board") selectNode(null); }}
+        onViewChange={(v) => { setActiveView(v); selectNode(null); }}
         onAddNode={() => handleOpenAddNode()}
         onAddWorkstream={() => setAddWorkstreamModal(true)}
       />
@@ -55,11 +60,9 @@ export function Shell() {
         ) : activeView === "budget" ? (
           <BudgetView />
         ) : (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 12 }}>
-            Graph view is being rebuilt.
-          </div>
+          <GraphView />
         )}
-        {/* NodePanel disabled — was only used by Graph view */}
+        {activeView === "graph" && selectedNode && <NodePanel />}
       </div>
 
       {addNodeModal.open && (

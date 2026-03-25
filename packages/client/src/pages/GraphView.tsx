@@ -1,13 +1,18 @@
-import { useCallback, useState, useRef, useMemo, useEffect } from "react";
+import { useCallback, useRef, useMemo, useEffect, useState } from "react";
 import { useGraphStore } from "../stores/graphStore";
 import { api } from "../api";
-import type { Node, Edge } from "@rome/shared";
+import type { Node } from "@rome/shared";
 import {
   buildClusterMaps,
   isClusterNode,
   statusColor,
   priorityColor,
 } from "../constants";
+import {
+  useForceSimulation,
+  type LayoutMode,
+} from "../hooks/useForceSimulation";
+import { isGoalNode } from "../utils/graphLayout";
 
 interface Viewport {
   x: number;
@@ -15,301 +20,106 @@ interface Viewport {
   z: number;
 }
 
-interface GraphViewProps {
-  onNavigateToNode?: (nodeId: string) => void;
-}
-
-function isGoalNode(node: Node): boolean {
-  const name = node.name.toLowerCase();
-  return name.includes("goal") || name.includes("mission");
-}
-
-function computeLayout(
-  nodes: Node[],
-  edges: Edge[],
-  childrenMap: Map<string, string[]>,
-  parentMap: Map<string, string>,
-): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>();
-
-  const goalNode = nodes.find(isGoalNode);
-  if (goalNode) {
-    positions.set(goalNode.id, { x: 0, y: 0 });
-  }
-
-  // Group by workstream
-  const workstreams = new Map<string, Node[]>();
-  for (const n of nodes) {
-    if (goalNode && n.id === goalNode.id) continue;
-    const ws = n.workstream ?? "Other";
-    const group = workstreams.get(ws) ?? [];
-    group.push(n);
-    workstreams.set(ws, group);
-  }
-
-  const wsEntries = [...workstreams.entries()];
-  const wsCount = wsEntries.length;
-  // Compact radius — fits in a single viewport
-  const baseRadius = Math.max(120, wsCount * 35);
-
-  wsEntries.forEach(([, wsNodes], wsIndex) => {
-    const angle = (wsIndex / wsCount) * Math.PI * 2 - Math.PI / 2;
-    const wsCenter = {
-      x: Math.cos(angle) * baseRadius,
-      y: Math.sin(angle) * baseRadius,
-    };
-
-    const clusterParents = wsNodes.filter((n) => childrenMap.has(n.id) && (childrenMap.get(n.id)?.length ?? 0) > 0);
-    const ungroupedLeaves = wsNodes
-      .filter((n) => !childrenMap.has(n.id) || (childrenMap.get(n.id)?.length ?? 0) === 0)
-      .filter((n) => !parentMap.has(n.id));
-
-    // Tight 2-col grid for cluster parents
-    const cols = Math.max(2, Math.ceil(Math.sqrt(clusterParents.length)));
-    clusterParents.forEach((cluster, ci) => {
-      const row = Math.floor(ci / cols);
-      const col = ci % cols;
-      const cx = wsCenter.x + (col - (cols - 1) / 2) * 100;
-      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * 80;
-      positions.set(cluster.id, { x: cx, y: cy });
-
-      // Children in a tight circle around parent
-      const children = childrenMap.get(cluster.id) ?? [];
-      const childRadius = Math.max(50, children.length * 14);
-      children.forEach((childId, chi) => {
-        const childAngle = (chi / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;
-        positions.set(childId, {
-          x: cx + Math.cos(childAngle) * childRadius,
-          y: cy + Math.sin(childAngle) * childRadius,
-        });
-      });
-    });
-
-    // Ungrouped leaves in a small ring near workstream center
-    const leafRadius = clusterParents.length > 0 ? 70 : 50;
-    ungroupedLeaves.forEach((leaf, li) => {
-      const leafAngle = (li / Math.max(ungroupedLeaves.length, 1)) * Math.PI * 2;
-      positions.set(leaf.id, {
-        x: wsCenter.x + Math.cos(leafAngle) * leafRadius,
-        y: wsCenter.y + Math.sin(leafAngle) * leafRadius,
-      });
-    });
-  });
-
-  return positions;
-}
-
-export function GraphView({ onNavigateToNode }: GraphViewProps) {
+export function GraphView() {
   const storeNodes = useGraphStore((s) => s.nodes);
   const storeEdges = useGraphStore((s) => s.edges);
   const selectedNode = useGraphStore((s) => s.selectedNode);
   const selectNode = useGraphStore((s) => s.selectNode);
   const updateNode = useGraphStore((s) => s.updateNode);
-  const collapsed = useGraphStore((s) => s.collapsed);
-  const toggleCollapsed = useGraphStore((s) => s.toggleCollapsed);
-  const collapseAll = useGraphStore((s) => s.collapseAll);
 
   const svgRef = useRef<SVGSVGElement>(null);
-  const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, z: 0.9 });
+  const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, z: 1 });
   const vpRef = useRef(vp);
   vpRef.current = vp;
-  const nodesRef = useRef(storeNodes);
-  nodesRef.current = storeNodes;
-  const dragState = useRef<{
-    id: string;
-    startMX: number;
-    startMY: number;
-    startNX: number;
-    startNY: number;
-    moved: boolean;
-    childStarts: Record<string, { x: number; y: number }>;
-  } | null>(null);
-  const hasInitCollapsed = useRef(false);
   const hasInitViewport = useRef(false);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
-  const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(storeEdges), [storeEdges]);
-
-  // Collapse all clusters by default on initial load
-  useEffect(() => {
-    if (hasInitCollapsed.current || childrenMap.size === 0) return;
-    hasInitCollapsed.current = true;
-    collapseAll([...childrenMap.keys()]);
-  }, [childrenMap, collapseAll]);
-
-  const layoutPositions = useMemo(
-    () => computeLayout(storeNodes, storeEdges, childrenMap, parentMap),
-    [storeNodes, storeEdges, childrenMap, parentMap],
+  const { parentMap, childrenMap } = useMemo(
+    () => buildClusterMaps(storeEdges),
+    [storeEdges],
   );
 
-  const nodePos = useCallback(
-    (n: Node): { x: number; y: number } => {
-      if (n.x != null && n.y != null) return { x: n.x, y: n.y };
-      return layoutPositions.get(n.id) ?? { x: 0, y: 0 };
-    },
-    [layoutPositions],
-  );
-
-  const posMap = useMemo(() => {
-    const m = new Map<string, { x: number; y: number }>();
-    for (const n of storeNodes) m.set(n.id, nodePos(n));
-    return m;
-  }, [storeNodes, nodePos]);
-
-  // Center viewport on goal node once we have positions
-  useEffect(() => {
-    if (hasInitViewport.current) return;
-    const svg = svgRef.current;
-    if (!svg || storeNodes.length === 0) return;
-    hasInitViewport.current = true;
-    const rect = svg.getBoundingClientRect();
-    const z = 1.1;
-    // Center the viewport on (0,0) which is where goal node sits
-    setVp({
-      x: rect.width / 2,
-      y: rect.height / 2,
-      z,
-    });
-  }, [storeNodes]);
+  const {
+    positions: posMap,
+    mode,
+    setMode,
+    onDragStart: simDragStart,
+    onDragEnd: simDragEnd,
+    settled,
+  } = useForceSimulation(storeNodes, storeEdges);
 
   const selId = selectedNode?.id ?? null;
 
-  // Visible nodes (hide collapsed children)
-  const hiddenNodes = useMemo(() => {
-    const hidden = new Set<string>();
-    for (const cid of collapsed) {
-      for (const childId of childrenMap.get(cid) ?? []) hidden.add(childId);
+  // Fit-to-viewport: compute bounds of all nodes and set zoom/pan to fit
+  const fitToViewport = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg || posMap.size === 0) return;
+    const rect = svg.getBoundingClientRect();
+
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    for (const pos of posMap.values()) {
+      minX = Math.min(minX, pos.x);
+      maxX = Math.max(maxX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxY = Math.max(maxY, pos.y);
     }
-    return hidden;
-  }, [collapsed, childrenMap]);
 
-  const visibleNodes = useMemo(
-    () => storeNodes.filter((n) => !hiddenNodes.has(n.id)),
-    [storeNodes, hiddenNodes],
-  );
+    const padding = 60;
+    const graphW = maxX - minX + padding * 2;
+    const graphH = maxY - minY + padding * 2;
+    const z = Math.min(
+      rect.width / graphW,
+      rect.height / graphH,
+      2,
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
 
-  // Visible edges — reroute collapsed children to parent
+    setVp({
+      x: rect.width / 2 - cx * z,
+      y: rect.height / 2 - cy * z,
+      z,
+    });
+  }, [posMap]);
+
+  // Initial fit-to-viewport once positions are available
+  useEffect(() => {
+    if (hasInitViewport.current || posMap.size === 0 || !settled) return;
+    hasInitViewport.current = true;
+    fitToViewport();
+  }, [posMap, settled, fitToViewport]);
+
+  // Visible edges — skip parent_of, reroute collapsed children to parent
   const graphEdges = useMemo(() => {
     const seen = new Set<string>();
-    const result: Array<{ edge: Edge; fromId: string; toId: string }> = [];
+    const result: Array<{
+      edgeId: string;
+      type: string;
+      fromId: string;
+      toId: string;
+    }> = [];
     for (const e of storeEdges) {
       if (e.type === "parent_of") continue;
-      let sourceId = e.sourceId;
-      let targetId = e.targetId;
-      if (hiddenNodes.has(sourceId)) sourceId = parentMap.get(sourceId) ?? sourceId;
-      if (hiddenNodes.has(targetId)) targetId = parentMap.get(targetId) ?? targetId;
+      const sourceId = e.sourceId;
+      const targetId = e.targetId;
       if (sourceId === targetId) continue;
       const key = `${sourceId}>${targetId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push({ edge: e, fromId: sourceId, toId: targetId });
+      result.push({
+        edgeId: e.id,
+        type: e.type,
+        fromId: sourceId,
+        toId: targetId,
+      });
     }
     return result;
-  }, [storeEdges, hiddenNodes, parentMap]);
-
-  // Wheel zoom
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY === 0) return;
-      e.preventDefault();
-      const rect = svg.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const v = vpRef.current;
-      const nz = Math.max(0.3, Math.min(5, v.z * (e.deltaY > 0 ? 0.92 : 1.08)));
-      setVp({ x: mx - (mx - v.x) * (nz / v.z), y: my - (my - v.y) * (nz / v.z), z: nz });
-    };
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, []);
-
-  // Node drag
-  function onNodeMouseDown(e: React.MouseEvent, nodeId: string) {
-    e.stopPropagation();
-    const pos = posMap.get(nodeId);
-    if (!pos) return;
-    const childStarts: Record<string, { x: number; y: number }> = {};
-    if (isClusterNode(nodeId, childrenMap)) {
-      for (const cid of childrenMap.get(nodeId) ?? []) {
-        const cp = posMap.get(cid);
-        if (cp) childStarts[cid] = { ...cp };
-      }
-    }
-    dragState.current = {
-      id: nodeId,
-      startMX: e.clientX,
-      startMY: e.clientY,
-      startNX: pos.x,
-      startNY: pos.y,
-      moved: false,
-      childStarts,
-    };
-
-    const onMove = (me: MouseEvent) => {
-      const ds = dragState.current;
-      if (!ds) return;
-      const dx = me.clientX - ds.startMX;
-      const dy = me.clientY - ds.startMY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ds.moved = true;
-      if (ds.moved) {
-        const v = vpRef.current;
-        const mx = dx / v.z;
-        const my = dy / v.z;
-        const newX = ds.startNX + mx;
-        const newY = ds.startNY + my;
-        updateNode(ds.id, { x: newX, y: newY });
-        for (const [cid, start] of Object.entries(ds.childStarts)) {
-          updateNode(cid, { x: start.x + mx, y: start.y + my });
-        }
-      }
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      const ds = dragState.current;
-      if (ds && !ds.moved) {
-        const node = storeNodes.find((n) => n.id === ds.id) ?? null;
-        selectNode(node);
-      }
-      if (ds?.moved) {
-        const pos = posMap.get(ds.id);
-        if (pos) {
-          api(`/nodes/${ds.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ x: pos.x, y: pos.y, position_pinned: 1 }),
-          }).catch(() => {});
-        }
-      }
-      dragState.current = null;
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
-  // Background pan
-  function onBgMouseDown(e: React.MouseEvent) {
-    if (e.button !== 0) return;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let panned = false;
-    const startVp = { ...vpRef.current };
-    const onMove = (me: MouseEvent) => {
-      if (Math.abs(me.clientX - startX) > 3 || Math.abs(me.clientY - startY) > 3) panned = true;
-      setVp({ x: startVp.x + (me.clientX - startX), y: startVp.y + (me.clientY - startY), z: startVp.z });
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      if (!panned) selectNode(null);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
+  }, [storeEdges]);
 
   // Connected nodes for selection highlighting
-  const goalNode = useMemo(() => storeNodes.find(isGoalNode) ?? null, [storeNodes]);
-
   const connectedIds = useMemo(() => {
     if (!selId) return new Set<string>();
     const ids = new Set<string>();
@@ -324,6 +134,8 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
       for (const sib of childrenMap.get(pid) ?? []) ids.add(sib);
     }
     for (const child of childrenMap.get(selId) ?? []) ids.add(child);
+    // If goal is selected, show all cluster parents; if cluster selected, show goal
+    const goalNode = storeNodes.find(isGoalNode);
     if (goalNode) {
       const clusterIds = [...childrenMap.keys()];
       if (selId === goalNode.id) {
@@ -333,17 +145,149 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
       }
     }
     return ids;
-  }, [selId, storeEdges, parentMap, childrenMap, goalNode]);
+  }, [selId, storeEdges, parentMap, childrenMap, storeNodes]);
 
-  // Status indicator: small dot on node
+  // Wheel zoom
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      e.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const v = vpRef.current;
+      const nz = Math.max(0.2, Math.min(4, v.z * (e.deltaY > 0 ? 0.92 : 1.08)));
+      setVp({
+        x: mx - (mx - v.x) * (nz / v.z),
+        y: my - (my - v.y) * (nz / v.z),
+        z: nz,
+      });
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Drag state for nodes
+  const dragState = useRef<{
+    id: string;
+    startMX: number;
+    startMY: number;
+    startNX: number;
+    startNY: number;
+    moved: boolean;
+  } | null>(null);
+
+  function onNodeMouseDown(e: React.MouseEvent, nodeId: string) {
+    e.stopPropagation();
+    const pos = posMap.get(nodeId);
+    if (!pos) return;
+
+    dragState.current = {
+      id: nodeId,
+      startMX: e.clientX,
+      startMY: e.clientY,
+      startNX: pos.x,
+      startNY: pos.y,
+      moved: false,
+    };
+
+    simDragStart(nodeId, e.clientX, e.clientY);
+
+    const onMove = (me: MouseEvent) => {
+      const ds = dragState.current;
+      if (!ds) return;
+      const dx = me.clientX - ds.startMX;
+      const dy = me.clientY - ds.startMY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ds.moved = true;
+      if (ds.moved) {
+        const v = vpRef.current;
+        const newX = ds.startNX + dx / v.z;
+        const newY = ds.startNY + dy / v.z;
+        updateNode(ds.id, { x: newX, y: newY });
+      }
+    };
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      const ds = dragState.current;
+      if (ds && !ds.moved) {
+        const node = storeNodes.find((n) => n.id === ds.id) ?? null;
+        selectNode(node);
+      }
+      const shouldPatch = simDragEnd();
+      if (shouldPatch && ds?.moved) {
+        const pos = posMap.get(ds.id);
+        if (
+          pos &&
+          Number.isFinite(pos.x) &&
+          Number.isFinite(pos.y)
+        ) {
+          api(`/nodes/${ds.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              x: pos.x,
+              y: pos.y,
+              position_pinned: 1,
+            }),
+          }).catch(() => {});
+        }
+      }
+      dragState.current = null;
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  // Background pan
+  function onBgMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let panned = false;
+    const startVp = { ...vpRef.current };
+    const onMove = (me: MouseEvent) => {
+      if (Math.abs(me.clientX - startX) > 3 || Math.abs(me.clientY - startY) > 3)
+        panned = true;
+      setVp({
+        x: startVp.x + (me.clientX - startX),
+        y: startVp.y + (me.clientY - startY),
+        z: startVp.z,
+      });
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (!panned) selectNode(null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  const goalNode = useMemo(
+    () => storeNodes.find(isGoalNode) ?? null,
+    [storeNodes],
+  );
+
+  // Edge color helper
+  function edgeColor(type: string): string {
+    if (type === "blocks" || type === "blocker") return "#B81917";
+    if (type === "depends_on") return "#f59e0b";
+    if (type === "sequence") return "#3B82F6";
+    return "#999";
+  }
+
+  // Status dot
   function statusDot(cx: number, cy: number, r: number, status: string) {
     if (status === "not_started") return null;
-    const dotR = 3;
     return (
       <circle
         cx={cx + r * 0.7}
         cy={cy - r * 0.7}
-        r={dotR}
+        r={3}
         fill={statusColor(status)}
         stroke="#FFF"
         strokeWidth={1}
@@ -352,45 +296,153 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
     );
   }
 
-  return (
-    <div className="canvas-area" style={{ background: "#FEFEFE" }}>
-      <svg ref={svgRef} onMouseDown={onBgMouseDown} style={{ userSelect: "none", cursor: "grab" }}>
-        <g style={{ transform: `translate(${vp.x}px,${vp.y}px) scale(${vp.z})`, transformOrigin: "0 0" }}>
+  // -- Empty / Loading states --
+  if (storeNodes.length === 0) {
+    return (
+      <div
+        className="canvas-area"
+        style={{
+          background: "#FEFEFE",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <span style={{ color: "#999", fontSize: 12, fontFamily: "Tomorrow, sans-serif" }}>
+          No nodes yet. Create your first node with +NODE.
+        </span>
+      </div>
+    );
+  }
 
-          {/* Subtle connector lines from cluster parents to goal node */}
+  return (
+    <div className="canvas-area" style={{ background: "#FEFEFE", position: "relative" }}>
+      {/* Physics/Static toggle + Fit button */}
+      <div
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 12,
+          zIndex: 10,
+          display: "flex",
+          gap: 6,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            background: "#fff",
+            border: "1px solid #E0E0E0",
+            borderRadius: 6,
+            overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          }}
+        >
+          {(["physics", "static"] as LayoutMode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{
+                padding: "6px 14px",
+                fontSize: 10,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                border: "none",
+                background: mode === m ? "#1A1A1A" : "transparent",
+                color: mode === m ? "#fff" : "#888",
+                fontWeight: 500,
+                fontFamily: "Tomorrow, sans-serif",
+                textTransform: "uppercase",
+              }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={fitToViewport}
+          style={{
+            padding: "6px 10px",
+            fontSize: 10,
+            letterSpacing: 0.5,
+            cursor: "pointer",
+            border: "1px solid #E0E0E0",
+            borderRadius: 6,
+            background: "#fff",
+            color: "#888",
+            fontWeight: 500,
+            fontFamily: "Tomorrow, sans-serif",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          }}
+          title="Fit all nodes in viewport"
+        >
+          FIT
+        </button>
+      </div>
+
+      <svg
+        ref={svgRef}
+        onMouseDown={onBgMouseDown}
+        style={{ userSelect: "none", cursor: "grab", width: "100%", height: "100%" }}
+      >
+        {/* Dot grid pattern */}
+        <defs>
+          <pattern
+            id="graph-dots"
+            x="0"
+            y="0"
+            width="40"
+            height="40"
+            patternUnits="userSpaceOnUse"
+          >
+            <circle cx="20" cy="20" r="0.5" fill="#E8E8E8" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#graph-dots)" pointerEvents="none" />
+
+        <g
+          style={{
+            transform: `translate(${vp.x}px,${vp.y}px) scale(${vp.z})`,
+            transformOrigin: "0 0",
+          }}
+        >
+          {/* Goal → cluster parent connector lines */}
           {(() => {
-            const gn = visibleNodes.find(isGoalNode);
-            if (!gn) return null;
-            const goalPos = posMap.get(gn.id);
+            if (!goalNode) return null;
+            const goalPos = posMap.get(goalNode.id);
             if (!goalPos) return null;
-            const clusters = visibleNodes.filter((n) => isClusterNode(n.id, childrenMap));
+            const clusters = storeNodes.filter((n) =>
+              isClusterNode(n.id, childrenMap),
+            );
             return clusters.map((cluster) => {
               const cPos = posMap.get(cluster.id);
               if (!cPos) return null;
               const dx = cPos.x - goalPos.x;
               const dy = cPos.y - goalPos.y;
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              const goalR = 24;
-              const clusterR = 10;
-              const fx = goalPos.x + (dx / dist) * goalR;
-              const fy = goalPos.y + (dy / dist) * goalR;
-              const tx = cPos.x - (dx / dist) * clusterR;
-              const ty = cPos.y - (dy / dist) * clusterR;
-              const dim = selId && selId !== gn.id && selId !== cluster.id;
+              const dim = selId && selId !== goalNode.id && selId !== cluster.id;
               return (
                 <line
-                  key={`goal-link-${cluster.id}`}
-                  x1={fx} y1={fy} x2={tx} y2={ty}
+                  key={`goal-${cluster.id}`}
+                  x1={goalPos.x + (dx / dist) * 24}
+                  y1={goalPos.y + (dy / dist) * 24}
+                  x2={cPos.x - (dx / dist) * 10}
+                  y2={cPos.y - (dy / dist) * 10}
                   stroke="#D0D0D0"
                   strokeWidth={0.8}
-                  style={{ opacity: dim ? 0.08 : 0.4, transition: "opacity 0.2s" }}
+                  style={{
+                    opacity: dim ? 0.08 : 0.4,
+                    transition: "opacity 0.2s",
+                  }}
                 />
               );
             });
           })()}
 
-          {/* Dependency edges — color-coded with arrowheads */}
-          {graphEdges.map(({ edge, fromId, toId }, i) => {
+          {/* Dependency edges */}
+          {graphEdges.map(({ edgeId, type, fromId, toId }) => {
             const sp = posMap.get(fromId);
             const tp = posMap.get(toId);
             if (!sp || !tp) return null;
@@ -404,159 +456,129 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             const y1 = sp.y + ny * r;
             const x2 = tp.x - nx * r;
             const y2 = tp.y - ny * r;
-            const isConnected = selId && (edge.sourceId === selId || edge.targetId === selId);
+            const isConnected =
+              selId && (fromId === selId || toId === selId);
             const dim = selId && !isConnected;
-            const edgeColor = edge.type === "blocks" || edge.type === "blocker" ? "#B81917"
-              : edge.type === "depends_on" ? "#f59e0b"
-              : edge.type === "sequence" ? "#3B82F6"
-              : "#999";
+            const color = edgeColor(type);
             return (
-              <g key={i} style={{ opacity: dim ? 0.08 : 0.6, transition: "opacity 0.2s" }}>
+              <g
+                key={edgeId}
+                style={{
+                  opacity: dim ? 0.08 : 0.6,
+                  transition: "opacity 0.2s",
+                }}
+              >
                 <line
-                  x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke={edgeColor}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={color}
                   strokeWidth={dim ? 0.8 : 1.5}
-                  strokeDasharray={edge.type === "depends_on" ? "4,3" : undefined}
+                  strokeDasharray={type === "depends_on" ? "4,3" : undefined}
                 />
                 <polygon
                   points={`${x2},${y2} ${x2 - nx * 6 + ny * 3},${y2 - ny * 6 - nx * 3} ${x2 - nx * 6 - ny * 3},${y2 - ny * 6 + nx * 3}`}
-                  fill={edgeColor}
+                  fill={color}
                 />
               </g>
             );
           })}
 
-          {/* Cluster pills (collapsed) */}
-          {visibleNodes.filter((n) => isClusterNode(n.id, childrenMap)).map((cluster) => {
-            const childCount = (childrenMap.get(cluster.id) ?? []).length;
-            const isCol = collapsed.has(cluster.id);
-            const isSel = selId === cluster.id;
-            const pos = posMap.get(cluster.id) ?? { x: 0, y: 0 };
-            const dim = selId && !isSel && !connectedIds.has(cluster.id);
-
-            if (isCol) {
-              // Compact pill
-              const label = cluster.name;
-              const pillW = Math.max(60, label.length * 5.5 + 36);
-              const pillH = 20;
+          {/* Cluster parent nodes — circles */}
+          {storeNodes
+            .filter((n) => isClusterNode(n.id, childrenMap) && !isGoalNode(n))
+            .map((cluster) => {
+              const pos = posMap.get(cluster.id);
+              if (!pos) return null;
+              const isSel = selId === cluster.id;
+              const dim =
+                selId && !isSel && !connectedIds.has(cluster.id);
+              const isHovered = hoveredNode === cluster.id;
               return (
-                <g key={`cl-${cluster.id}`}
-                  style={{ opacity: dim ? 0.2 : 1, transition: "opacity 0.2s" }}
+                <g
+                  key={`cl-${cluster.id}`}
                   className="graph-node"
                   onMouseDown={(e) => onNodeMouseDown(e, cluster.id)}
+                  onMouseEnter={() => setHoveredNode(cluster.id)}
+                  onMouseLeave={() => setHoveredNode(null)}
+                  style={{
+                    opacity: dim ? 0.15 : 1,
+                    transition: "opacity 0.2s",
+                    cursor: "pointer",
+                  }}
                 >
-                  <rect
-                    x={pos.x - pillW / 2} y={pos.y - pillH / 2}
-                    width={pillW} height={pillH}
-                    rx={pillH / 2}
-                    fill={isSel ? "#1A1A1A" : "#FFF"}
-                    stroke={isSel ? "#1A1A1A" : "#D0D0D0"}
-                    strokeWidth={isSel ? 1.5 : 0.8}
+                  <circle
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={isSel ? 12 : 10}
+                    fill={priorityColor(cluster.priority)}
+                    stroke={isSel ? "#1A1A1A" : "#FFF"}
+                    strokeWidth={isSel ? 2 : 1}
                   />
+                  {statusDot(pos.x, pos.y, 10, cluster.status)}
                   <text
-                    x={pos.x - pillW / 2 + 10} y={pos.y + 3}
-                    fontSize="7" fontWeight="600" letterSpacing="0.5"
-                    fill={isSel ? "#FFF" : "#555"}
+                    x={pos.x}
+                    y={pos.y + (isHovered ? 16 : 14)}
+                    textAnchor="middle"
+                    fontSize={isHovered ? 11 : 7}
+                    fontWeight={isSel || isHovered ? "600" : "500"}
+                    fill={isSel ? "#1A1A1A" : "#777"}
                     pointerEvents="none"
+                    style={{ transition: "font-size 0.15s" }}
                   >
-                    {label}
-                  </text>
-                  <text
-                    x={pos.x + pillW / 2 - 18} y={pos.y + 3}
-                    fontSize="7" fill={isSel ? "#999" : "#BBB"}
-                    pointerEvents="none"
-                  >
-                    {childCount}
-                  </text>
-                  <text
-                    x={pos.x + pillW / 2 - 10} y={pos.y + 3.5}
-                    fontSize="7" fill={isSel ? "#999" : "#CCC"}
-                    style={{ cursor: "pointer" }}
-                    onMouseDown={(e) => { e.stopPropagation(); toggleCollapsed(cluster.id); }}
-                  >
-                    +
+                    {cluster.name.length > 24
+                      ? cluster.name.slice(0, 22) + "…"
+                      : cluster.name}
                   </text>
                 </g>
               );
-            }
+            })}
 
-            // Expanded cluster: minimal container
-            const ch = visibleNodes.filter((n) => parentMap.get(n.id) === cluster.id);
-            if (!ch.length) return null;
-            const pad = 20;
-            const chPositions = ch.map((n) => posMap.get(n.id)).filter(Boolean) as { x: number; y: number }[];
-            const allPositions = [pos, ...chPositions];
-            const minX = Math.min(...allPositions.map((p) => p.x)) - pad;
-            const maxX = Math.max(...allPositions.map((p) => p.x)) + pad;
-            const minY = Math.min(...allPositions.map((p) => p.y)) - pad;
-            const maxY = Math.max(...allPositions.map((p) => p.y)) + pad;
-            const rW = maxX - minX;
-            const rH = maxY - minY;
-
-            return (
-              <g key={`cl-${cluster.id}`} style={{ opacity: dim ? 0.2 : 1, transition: "opacity 0.2s" }}>
-                <rect
-                  x={minX} y={minY} width={rW} height={rH}
-                  rx={12}
-                  fill="none"
-                  stroke="#E8E8E8"
-                  strokeWidth={0.6}
-                  strokeDasharray="4,3"
-                />
-                {/* Cluster label — minimal */}
-                <text
-                  x={minX + 8} y={minY + 11}
-                  fontSize="6" fontWeight="500" letterSpacing="1"
-                  fill="#CCC"
-                  pointerEvents="none"
-                >
-                  {cluster.name.toUpperCase()}
-                </text>
-                {/* Collapse button */}
-                <text
-                  x={maxX - 10} y={minY + 11}
-                  fontSize="7" fill="#CCC"
-                  style={{ cursor: "pointer" }}
-                  onMouseDown={(e) => { e.stopPropagation(); toggleCollapsed(cluster.id); }}
-                >
-                  −
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Goal node — clean circle */}
+          {/* Goal node */}
           {(() => {
-            const gn = visibleNodes.find(isGoalNode);
+            const gn = goalNode;
             if (!gn) return null;
-            const pos = posMap.get(gn.id) ?? { x: 0, y: 0 };
+            const pos = posMap.get(gn.id);
+            if (!pos) return null;
             const r = 22;
             const isSelected = selId === gn.id;
-            const dimmed = selId && !isSelected && !connectedIds.has(gn.id);
+            const dimmed =
+              selId && !isSelected && !connectedIds.has(gn.id);
             return (
               <g
                 className="graph-node"
                 onMouseDown={(e) => onNodeMouseDown(e, gn.id)}
-                style={{ opacity: dimmed ? 0.2 : 1, transition: "opacity 0.2s" }}
+                style={{
+                  opacity: dimmed ? 0.15 : 1,
+                  transition: "opacity 0.2s",
+                  cursor: "pointer",
+                }}
               >
                 <circle
-                  cx={pos.x} cy={pos.y} r={r}
+                  cx={pos.x}
+                  cy={pos.y}
+                  r={r}
                   fill="#1A1A1A"
                   stroke={isSelected ? "#B81917" : "none"}
                   strokeWidth={isSelected ? 2 : 0}
                 />
                 <text
-                  x={pos.x} y={pos.y + 1}
+                  x={pos.x}
+                  y={pos.y + 1}
                   textAnchor="middle"
                   fontSize="7"
                   fontWeight="600"
                   fill="#FFFFFF"
                   pointerEvents="none"
                 >
-                  {gn.name.length > 18 ? gn.name.slice(0, 16) + "…" : gn.name}
+                  {gn.name.length > 18
+                    ? gn.name.slice(0, 16) + "…"
+                    : gn.name}
                 </text>
                 <text
-                  x={pos.x} y={pos.y + r + 12}
+                  x={pos.x}
+                  y={pos.y + r + 12}
                   textAnchor="middle"
                   fontSize="6"
                   fontWeight="400"
@@ -570,24 +592,40 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             );
           })()}
 
-          {/* Regular nodes — clean circles with labels */}
-          {visibleNodes
-            .filter((n) => !isClusterNode(n.id, childrenMap) && !isGoalNode(n))
+          {/* Regular task nodes */}
+          {storeNodes
+            .filter(
+              (n) =>
+                !isClusterNode(n.id, childrenMap) && !isGoalNode(n),
+            )
             .map((node) => {
-              const pos = posMap.get(node.id) ?? { x: 0, y: 0 };
+              const pos = posMap.get(node.id);
+              if (!pos) return null;
               const r = 6;
               const isSelected = selId === node.id;
-              const dimmed = selId && !isSelected && !connectedIds.has(node.id);
-              const fill = node.status === "done" ? "#16a34a" : priorityColor(node.priority);
+              const dimmed =
+                selId && !isSelected && !connectedIds.has(node.id);
+              const fill =
+                node.status === "done"
+                  ? "#16a34a"
+                  : priorityColor(node.priority);
+              const isHovered = hoveredNode === node.id;
               return (
                 <g
                   key={node.id}
                   className="graph-node"
                   onMouseDown={(e) => onNodeMouseDown(e, node.id)}
-                  style={{ opacity: dimmed ? 0.15 : 1, transition: "opacity 0.2s" }}
+                  onMouseEnter={() => setHoveredNode(node.id)}
+                  onMouseLeave={() => setHoveredNode(null)}
+                  style={{
+                    opacity: dimmed ? 0.15 : 1,
+                    transition: "opacity 0.2s",
+                    cursor: "pointer",
+                  }}
                 >
                   <circle
-                    cx={pos.x} cy={pos.y}
+                    cx={pos.x}
+                    cy={pos.y}
                     r={isSelected ? r + 1.5 : r}
                     fill={fill}
                     stroke={isSelected ? "#1A1A1A" : "#FFF"}
@@ -595,14 +633,18 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
                   />
                   {statusDot(pos.x, pos.y, r, node.status)}
                   <text
-                    x={pos.x} y={pos.y + r + 10}
+                    x={pos.x}
+                    y={pos.y + r + 10}
                     textAnchor="middle"
-                    fontSize="7"
-                    fontWeight={isSelected ? "600" : "400"}
+                    fontSize={isHovered ? 11 : 7}
+                    fontWeight={isSelected || isHovered ? "600" : "400"}
                     fill={isSelected ? "#1A1A1A" : "#777"}
                     pointerEvents="none"
+                    style={{ transition: "font-size 0.15s" }}
                   >
-                    {node.name.length > 24 ? node.name.slice(0, 22) + "…" : node.name}
+                    {node.name.length > 24
+                      ? node.name.slice(0, 22) + "…"
+                      : node.name}
                   </text>
                 </g>
               );
