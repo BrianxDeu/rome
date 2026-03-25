@@ -35,7 +35,7 @@ In-house project management software for DxD (5-10 users).
 npm workspaces monorepo:
 - `packages/shared` — TypeScript types and Drizzle ORM schema (camelCase field names)
 - `packages/server` — Express API + Socket.IO + SQLite via Drizzle ORM
-- `packages/client` — React 18 + React Flow + Zustand + Vite
+- `packages/client` — React 19 + Custom SVG Graph + Zustand + Vite + Tailwind v4 + shadcn/ui
 - `packages/cli` — Commander.js CLI wrapping REST API
 
 Design spec: `rome/crew/brian/docs/specs/2026-03-23-rome-design.md`
@@ -106,3 +106,49 @@ npm run test --workspace=packages/server
 ### Always verify with real API calls
 - Don't assume edge creation succeeded just because curl returned — check the response
 - Test the full path: API → DB → fetch → store → render
+
+### SVG pointer-events
+- Overlay rects (workstream boxes, cluster backgrounds) MUST have `pointer-events: none`
+- Without this, they intercept clicks on nodes beneath them
+- The graph-bg rect also needs `pointer-events: none`
+
+### Board add-node reactivity
+- After creating a node + parent_of edge via API, refetch `/api/graph` to update the store
+- Individual `addNode` + `addEdge` calls don't trigger `buildClusterMaps` recalculation in the same render cycle
+
+## Current State (2026-03-25)
+
+### What's Built
+- **4 views**: Board (primary), Graph (custom SVG), Gantt (bars + today line), Budget (hero + tables)
+- **Board**: Node groups (cluster sub-headers), drag-and-drop within/between groups, inline card editing, add node/add node group
+- **Graph**: Central goal node ("Mission: Ukraine MVP"), collapsible cluster bars, workstream dashed boxes, selection dimming, edge lines, pan/zoom
+- **Gantt**: 4 time scales (week/month/quarter/year), colored bars by priority, today line, detail panel in-place
+- **Budget**: Hero total, workstream bar chart, priority table, sortable/filterable items table with inline budget editing
+- **Detail Panel**: RACI (4 fields), dependency management (add/remove edges), status/priority/dates/budget editing
+- **TopBar**: DXD HALO OPS branding, Board/Graph/Gantt/Budget tabs, +NODE/+STREAM/SHARE/LOGOUT buttons
+- **API**: Full CRUD for nodes/edges, graph endpoint, budget rollup, auth (JWT), Socket.IO real-time sync
+- **shadcn/ui**: Installed (14 components) but only partially integrated — TopBar uses original CSS classes
+- **Deployment**: GitHub Actions auto-sync from bsulee/rome → BrianxDeu/rome, Railway config ready
+
+### Data Model
+- 38 nodes: 1 goal + 3 workstream headers (HALO MVP, ORCREST, LAPD) + 6 cluster parents (Hardware Tech Stack, Warhead Program, Ukraine Ops, Testing Campaign, Ops & PM, BD & Relationships) + 28 leaf task nodes
+- Parent-child relationships via `parent_of` edges
+- Dependency edges: blocks, blocker, depends_on, sequence, produces, feeds, shared
+- RACI stored as JSON in `raci` field — parseRaci() handles both short (R/A/C/I) and full keys, plus arrays
+
+### What Still Needs Work
+1. **Graph view**: Still too spread out. Needs tighter layout, more Obsidian-like. Node groups should cluster closer to center.
+2. **Cross-view sync**: Changes in Board should instantly reflect in Graph/Gantt/Budget (mostly works via Zustand store, but some operations need full refetch)
+3. **Deployment**: Railway project needs to be created and connected to BrianxDeu/rome
+
+### Reference Files (User's Original Design)
+The frontend was ported from these single-file HTML apps:
+- `dxd-halo-ops.html` — 4-view app (Board, Graph, Gantt, Budget) with clusters, board drag-drop, PeerJS collab
+- `dxd-graph-pm.html` — Graph-only view with groups, minimap
+- User preference: COPY reference code directly, don't rebuild from scratch
+
+### Key People
+- Brian Sullivan (PM) — primary user, coordinates everything
+- Serge — cUAS & R&D Lead, thinks in webs/connections
+- Scott — hardware/testing
+- Pat — CEO, needs investor-grade presentations
