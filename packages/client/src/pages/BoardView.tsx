@@ -203,14 +203,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           status: "not_started",
         }),
       });
-      addNode(node);
       if (clusterId) {
+        // Create edge BEFORE adding node to store so buildClusterMaps
+        // sees the parent_of relationship on first render
         const edge = await api<Edge>("/edges", {
           method: "POST",
           body: JSON.stringify({ source_id: clusterId, target_id: node.id, type: "parent_of" }),
         });
         addEdge(edge);
       }
+      addNode(node);
       setBoardAddLabel("");
       setBoardAddGroup(null);
       setBoardExpanded(node.id);
