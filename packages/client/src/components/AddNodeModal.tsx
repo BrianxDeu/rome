@@ -53,7 +53,7 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
       if (endDate) body.end_date = endDate;
       if (budget) body.budget = Number(budget);
       if (responsible.trim()) {
-        body.raci = JSON.stringify({ responsible: responsible.trim() });
+        body.raci = { responsible: responsible.trim() };
       }
 
       const node = await api<Node>("/nodes", {
@@ -252,7 +252,8 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
               size="sm"
               className="font-[Tomorrow] text-xs font-semibold"
               style={{ background: "#B81917" }}
-              onClick={advance}
+              onClick={(e) => { e.stopPropagation(); advance(); }}
+              onPointerDown={(e) => e.stopPropagation()}
               disabled={step === 0 && !name.trim()}
             >
               Next
@@ -262,7 +263,8 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
               size="sm"
               className="font-[Tomorrow] text-xs font-semibold"
               style={{ background: "#B81917" }}
-              onClick={handleSubmit}
+              onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
+              onPointerDown={(e) => e.stopPropagation()}
               disabled={!name.trim() || saving}
             >
               {saving ? "Adding..." : "Add Node"}
