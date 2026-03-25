@@ -189,7 +189,7 @@ export function GanttView() {
               })}
               <div className="gantt-today" style={{ left: todayX }} />
               {!hasAnyBars && (
-                <div style={{ position: "absolute", top: 80, left: 0, right: 0, textAlign: "center", color: "#999", fontSize: 12, letterSpacing: 0.5, pointerEvents: "none" }}>
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "#999", fontSize: 12, letterSpacing: 0.5 }}>
                   Set start and end dates on nodes to see timeline bars here.
                 </div>
               )}
