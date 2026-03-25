@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
-import { Button } from "./ui/button";
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import { Input } from "./ui/input";
 
 export type ViewTab = "board" | "graph" | "gantt" | "budget";
 
@@ -46,36 +43,34 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
         <div className="logo-diamond" />
         DXD HALO OPS
       </div>
-      <Tabs value={activeView} onValueChange={(v) => onViewChange(v as ViewTab)}>
-        <TabsList variant="line" className="h-auto gap-0 bg-transparent p-0">
-          {tabs.map((t) => (
-            <TabsTrigger
-              key={t}
-              value={t}
-              className="rounded-none border-b-2 border-transparent px-4 py-2 font-[Tomorrow] text-[10px] tracking-[2px] uppercase text-[#999] hover:text-[#1A1A1A] data-active:border-b-[#B81917] data-active:text-[#B81917] data-active:shadow-none"
-            >
-              {t.toUpperCase()}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div style={{ display: "flex", gap: 0 }}>
+        {tabs.map((t) => (
+          <button
+            key={t}
+            className={`tab${activeView === t ? " active" : ""}`}
+            onClick={() => onViewChange(t)}
+          >
+            {t.toUpperCase()}
+          </button>
+        ))}
+      </div>
       <div className="top-actions">
         {onAddNode && (
-          <Button variant="outline" size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={onAddNode}>+ NODE</Button>
+          <button className="btn" onClick={onAddNode}>+ NODE</button>
         )}
         {onAddWorkstream && (
-          <Button variant="outline" size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={onAddWorkstream}>+ STREAM</Button>
+          <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>
         )}
-        <Button variant="outline" size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={() => setShareOpen(!shareOpen)}>SHARE</Button>
+        <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
         {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}
-        <Button variant="outline" size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={logout}>LOGOUT</Button>
+        <button className="btn" onClick={logout}>LOGOUT</button>
       </div>
 
       {shareOpen && (
         <div className="share-pop" ref={popoverRef}>
           <div className="share-pop-title">SHARE LINK</div>
-          <Input
-            className="mb-2 font-[Tomorrow] text-[10px]"
+          <input
+            className="share-input"
             value={window.location.href}
             readOnly
             onFocus={(e) => e.target.select()}
