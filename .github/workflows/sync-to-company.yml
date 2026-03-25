@@ -6,6 +6,8 @@ on:
 
 jobs:
   sync:
+    # Only run on the personal repo, not the company mirror
+    if: github.repository == 'bsulee/rome'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
