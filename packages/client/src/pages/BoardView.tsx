@@ -32,6 +32,8 @@ interface BoardViewProps {
 export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
+  const setNodes = useGraphStore((s) => s.setNodes);
+  const setEdges = useGraphStore((s) => s.setEdges);
   const updateNode = useGraphStore((s) => s.updateNode);
   const removeNode = useGraphStore((s) => s.removeNode);
   const addNode = useGraphStore((s) => s.addNode);
@@ -177,15 +179,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           status: "not_started",
         }),
       });
-      addNode(node);
-      // Make it a child of the workstream header if one exists
       if (wsHeader) {
-        const edge = await api<Edge>("/edges", {
+        await api<Edge>("/edges", {
           method: "POST",
           body: JSON.stringify({ source_id: wsHeader.id, target_id: node.id, type: "parent_of" }),
         });
-        addEdge(edge);
       }
+      // Refetch full graph for consistency
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
       setBoardAddLabel("");
       setBoardAddGroup(null);
     } catch {}
@@ -204,15 +207,15 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         }),
       });
       if (clusterId) {
-        // Create edge BEFORE adding node to store so buildClusterMaps
-        // sees the parent_of relationship on first render
-        const edge = await api<Edge>("/edges", {
+        await api<Edge>("/edges", {
           method: "POST",
           body: JSON.stringify({ source_id: clusterId, target_id: node.id, type: "parent_of" }),
         });
-        addEdge(edge);
       }
-      addNode(node);
+      // Refetch full graph so edges + nodes are consistent for buildClusterMaps
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
       setBoardAddLabel("");
       setBoardAddGroup(null);
       setBoardExpanded(node.id);
