@@ -82,6 +82,8 @@ export function LoginPage() {
           onClick={() => {
             setIsRegister(!isRegister);
             setError("");
+            setPassword("");
+            if (!isRegister) setEmail("");
           }}
         >
           {isRegister ? "Have an account? Sign in" : "Need an account? Register"}
