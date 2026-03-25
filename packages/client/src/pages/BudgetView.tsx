@@ -17,14 +17,11 @@ const fmt$ = (n: number) => "$" + (n || 0).toLocaleString();
 
 type SortField = "label" | "priority" | "budget";
 
-interface BudgetViewProps {
-  onNavigateToNode: (nodeId: string) => void;
-}
-
-export function BudgetView({ onNavigateToNode }: BudgetViewProps) {
+export function BudgetView() {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const updateNode = useGraphStore((s) => s.updateNode);
+  const selectNode = useGraphStore((s) => s.selectNode);
   const [budgetSort, setBudgetSort] = useState<SortField>("budget");
   const [budgetDir, setBudgetDir] = useState(-1);
   const [budgetFilter, setBudgetFilter] = useState("all");
@@ -165,7 +162,7 @@ export function BudgetView({ onNavigateToNode }: BudgetViewProps) {
           <tbody>
             {budgetItems.map((n) => (
               <tr key={n.id} style={{ cursor: "pointer" }}>
-                <td onClick={() => onNavigateToNode(n.id)}>{n.name}</td>
+                <td onClick={() => selectNode(n)}>{n.name}</td>
                 <td style={{ color: priorityColor(n.priority) }}>{n.priority}</td>
                 <td>{n.workstream}</td>
                 <td>{statusLabel(n.status)}</td>

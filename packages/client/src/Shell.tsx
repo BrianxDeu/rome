@@ -55,9 +55,9 @@ export function Shell() {
         {activeView === "board" ? (
           <BoardView onNavigateToNode={handleNavigateToNode} onAddNode={handleOpenAddNode} />
         ) : activeView === "gantt" ? (
-          <GanttView onNavigateToNode={handleNavigateToNode} />
+          <GanttView />
         ) : activeView === "budget" ? (
-          <BudgetView onNavigateToNode={handleNavigateToNode} />
+          <BudgetView />
         ) : (
           <GraphView onNavigateToNode={handleNavigateToNode} />
         )}

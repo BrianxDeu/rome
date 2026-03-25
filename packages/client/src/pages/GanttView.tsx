@@ -9,10 +9,6 @@ import type { Node, Edge } from "@rome/shared";
 
 type TimeScale = "week" | "month" | "quarter" | "year";
 
-interface GanttViewProps {
-  onNavigateToNode: (nodeId: string) => void;
-}
-
 const PPD: Record<TimeScale, number> = { week: 40, month: 12, quarter: 4, year: 1.5 };
 
 interface GanttRow {
@@ -25,7 +21,7 @@ interface GanttRow {
 // Workstream colors
 const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
 
-export function GanttView({ onNavigateToNode }: GanttViewProps) {
+export function GanttView() {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const selectNode = useGraphStore((s) => s.selectNode);
@@ -130,7 +126,6 @@ export function GanttView({ onNavigateToNode }: GanttViewProps) {
 
   function handleClick(node: Node) {
     selectNode(node);
-    onNavigateToNode(node.id);
   }
 
   return (
