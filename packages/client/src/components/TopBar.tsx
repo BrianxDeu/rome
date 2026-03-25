@@ -30,8 +30,12 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
     return () => document.removeEventListener("mousedown", handleClick);
   }, [shareOpen]);
 
+  function shareUrl() {
+    return `${window.location.origin}/${activeView}`;
+  }
+
   function handleCopy() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
+    navigator.clipboard.writeText(shareUrl()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -67,7 +71,7 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
           <div className="share-pop-title">SHARE LINK</div>
           <input
             className="share-input"
-            value={window.location.href}
+            value={shareUrl()}
             readOnly
             onFocus={(e) => e.target.select()}
             onClick={handleCopy}
