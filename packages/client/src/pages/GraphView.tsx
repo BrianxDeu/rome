@@ -49,8 +49,8 @@ function computeLayout(
 
   const wsEntries = [...workstreams.entries()];
   const wsCount = wsEntries.length;
-  // Tight radius — just enough to separate workstreams
-  const baseRadius = Math.max(180, wsCount * 55);
+  // Compact radius — fits in a single viewport
+  const baseRadius = Math.max(120, wsCount * 35);
 
   wsEntries.forEach(([, wsNodes], wsIndex) => {
     const angle = (wsIndex / wsCount) * Math.PI * 2 - Math.PI / 2;
@@ -69,8 +69,8 @@ function computeLayout(
     clusterParents.forEach((cluster, ci) => {
       const row = Math.floor(ci / cols);
       const col = ci % cols;
-      const cx = wsCenter.x + (col - (cols - 1) / 2) * 140;
-      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * 100;
+      const cx = wsCenter.x + (col - (cols - 1) / 2) * 100;
+      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * 80;
       positions.set(cluster.id, { x: cx, y: cy });
 
       // Children in a tight circle around parent
