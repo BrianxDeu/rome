@@ -92,6 +92,9 @@ a {
 .btn.danger { background:#FFF0F0; border-color:#B81917; color:#B81917; }
 .btn.danger:hover { background:#B81917; color:#FFF; }
 
+.tab:focus-visible, .btn:focus-visible { outline:2px solid var(--rome-red); outline-offset:2px; }
+.dp-input:focus-visible, .dp-textarea:focus-visible { outline:2px solid var(--rome-red); outline-offset:-1px; }
+
 .main { display:flex; height:calc(100vh - 52px); overflow:hidden; }
 
 /* Graph */
