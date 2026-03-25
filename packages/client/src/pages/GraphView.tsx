@@ -391,28 +391,39 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             });
           })()}
 
-          {/* Dependency edges — subtle light gray */}
+          {/* Dependency edges — color-coded with arrowheads */}
           {graphEdges.map(({ edge, fromId, toId }, i) => {
-            const from = posMap.get(fromId);
-            const to = posMap.get(toId);
-            if (!from || !to) return null;
-            const dx = to.x - from.x;
-            const dy = to.y - from.y;
+            const sp = posMap.get(fromId);
+            const tp = posMap.get(toId);
+            if (!sp || !tp) return null;
+            const dx = tp.x - sp.x;
+            const dy = tp.y - sp.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const nr = 8;
-            const fx = from.x + (dx / dist) * nr;
-            const fy = from.y + (dy / dist) * nr;
-            const tx = to.x - (dx / dist) * nr;
-            const ty = to.y - (dy / dist) * nr;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const r = 8;
+            const x1 = sp.x + nx * r;
+            const y1 = sp.y + ny * r;
+            const x2 = tp.x - nx * r;
+            const y2 = tp.y - ny * r;
             const isConnected = selId && (edge.sourceId === selId || edge.targetId === selId);
             const dim = selId && !isConnected;
+            const edgeColor = edge.type === "blocks" || edge.type === "blocker" ? "#B81917"
+              : edge.type === "depends_on" ? "#f59e0b"
+              : edge.type === "sequence" ? "#3B82F6"
+              : "#999";
             return (
-              <g key={i} style={{ opacity: dim ? 0.06 : 0.35, transition: "opacity 0.2s" }}>
-                <line x1={fx} y1={fy} x2={tx} y2={ty}
-                  stroke="#999"
-                  strokeWidth={0.8}
+              <g key={i} style={{ opacity: dim ? 0.08 : 0.6, transition: "opacity 0.2s" }}>
+                <line
+                  x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke={edgeColor}
+                  strokeWidth={dim ? 0.8 : 1.5}
+                  strokeDasharray={edge.type === "depends_on" ? "4,3" : undefined}
                 />
-                <circle cx={tx} cy={ty} r={1.5} fill="#999" />
+                <polygon
+                  points={`${x2},${y2} ${x2 - nx * 6 + ny * 3},${y2 - ny * 6 - nx * 3} ${x2 - nx * 6 - ny * 3},${y2 - ny * 6 + nx * 3}`}
+                  fill={edgeColor}
+                />
               </g>
             );
           })}
