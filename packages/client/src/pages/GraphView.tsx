@@ -37,6 +37,7 @@ function computeLayout(
     positions.set(goalNode.id, { x: 0, y: 0 });
   }
 
+  // Group by workstream
   const workstreams = new Map<string, Node[]>();
   for (const n of nodes) {
     if (goalNode && n.id === goalNode.id) continue;
@@ -48,9 +49,10 @@ function computeLayout(
 
   const wsEntries = [...workstreams.entries()];
   const wsCount = wsEntries.length;
-  const baseRadius = Math.max(250, wsCount * 80);
+  // Tight radius — just enough to separate workstreams
+  const baseRadius = Math.max(180, wsCount * 55);
 
-  wsEntries.forEach(([ws, wsNodes], wsIndex) => {
+  wsEntries.forEach(([, wsNodes], wsIndex) => {
     const angle = (wsIndex / wsCount) * Math.PI * 2 - Math.PI / 2;
     const wsCenter = {
       x: Math.cos(angle) * baseRadius,
@@ -58,29 +60,24 @@ function computeLayout(
     };
 
     const clusterParents = wsNodes.filter((n) => childrenMap.has(n.id) && (childrenMap.get(n.id)?.length ?? 0) > 0);
-    const ungroupedLeaves = wsNodes.filter((n) => !childrenMap.has(n.id) || (childrenMap.get(n.id)?.length ?? 0) === 0)
+    const ungroupedLeaves = wsNodes
+      .filter((n) => !childrenMap.has(n.id) || (childrenMap.get(n.id)?.length ?? 0) === 0)
       .filter((n) => !parentMap.has(n.id));
 
-    const clusterSpacingX = 200;
-    const clusterSpacingY = 160;
+    // Tight 2-col grid for cluster parents
     const cols = Math.max(2, Math.ceil(Math.sqrt(clusterParents.length)));
-
     clusterParents.forEach((cluster, ci) => {
       const row = Math.floor(ci / cols);
       const col = ci % cols;
-      const cx = wsCenter.x + (col - (cols - 1) / 2) * clusterSpacingX;
-      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * clusterSpacingY;
+      const cx = wsCenter.x + (col - (cols - 1) / 2) * 140;
+      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * 100;
       positions.set(cluster.id, { x: cx, y: cy });
 
+      // Children in a tight circle around parent
       const children = childrenMap.get(cluster.id) ?? [];
-      const childRadius = Math.max(60, children.length * 18);
-      const arcSpan = Math.min(Math.PI * 1.2, children.length * 0.5);
-      const arcStart = angle - arcSpan / 2;
-
+      const childRadius = Math.max(50, children.length * 14);
       children.forEach((childId, chi) => {
-        const childAngle = children.length === 1
-          ? angle
-          : arcStart + (chi / (children.length - 1)) * arcSpan;
+        const childAngle = (chi / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;
         positions.set(childId, {
           x: cx + Math.cos(childAngle) * childRadius,
           y: cy + Math.sin(childAngle) * childRadius,
@@ -88,7 +85,8 @@ function computeLayout(
       });
     });
 
-    const leafRadius = clusterParents.length > 0 ? baseRadius * 0.3 : 60;
+    // Ungrouped leaves in a small ring near workstream center
+    const leafRadius = clusterParents.length > 0 ? 70 : 50;
     ungroupedLeaves.forEach((leaf, li) => {
       const leafAngle = (li / Math.max(ungroupedLeaves.length, 1)) * Math.PI * 2;
       positions.set(leaf.id, {
@@ -164,7 +162,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
     if (!svg || storeNodes.length === 0) return;
     hasInitViewport.current = true;
     const rect = svg.getBoundingClientRect();
-    const z = 0.9;
+    const z = 1.1;
     // Center the viewport on (0,0) which is where goal node sits
     setVp({
       x: rect.width / 2,

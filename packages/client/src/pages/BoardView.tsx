@@ -427,6 +427,59 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   />
                 </div>
               </div>
+              {/* Dependencies */}
+              {(() => {
+                const depTypes = new Set(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared"]);
+                const incoming = edges.filter((e) => e.targetId === n.id && depTypes.has(e.type));
+                const outgoing = edges.filter((e) => e.sourceId === n.id && depTypes.has(e.type));
+                const otherNodes = nodes.filter((nd) => nd.id !== n.id);
+                return (
+                  <div style={{ marginTop: 12 }}>
+                    {(incoming.length > 0 || outgoing.length > 0) && (
+                      <Label className="dp-label" style={{ marginBottom: 6 }}>Dependencies</Label>
+                    )}
+                    {incoming.map((e) => {
+                      const src = nodes.find((nd) => nd.id === e.sourceId);
+                      return (
+                        <div key={e.id} className="dp-dep">
+                          <span style={{ fontSize: 9 }}>{src?.name ?? "?"} <span style={{ color: "#B81917" }}>{e.type}</span> this</span>
+                          <button onClick={async () => {
+                            try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
+                          }}>&times;</button>
+                        </div>
+                      );
+                    })}
+                    {outgoing.map((e) => {
+                      const tgt = nodes.find((nd) => nd.id === e.targetId);
+                      return (
+                        <div key={e.id} className="dp-dep">
+                          <span style={{ fontSize: 9 }}>this <span style={{ color: "#3B82F6" }}>{e.type}</span> {tgt?.name ?? "?"}</span>
+                          <button onClick={async () => {
+                            try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
+                          }}>&times;</button>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop: 6 }}>
+                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
+                        const targetId = ev.target.value;
+                        if (!targetId) return;
+                        try {
+                          const edge = await api<Edge>("/edges", {
+                            method: "POST",
+                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: "depends_on" }),
+                          });
+                          addEdge(edge);
+                        } catch (err) { console.error("[BoardView] add dep:", err); }
+                        ev.target.value = "";
+                      }}>
+                        <option value="">+ Add dependency...</option>
+                        {otherNodes.map((nd) => <option key={nd.id} value={nd.id}>{nd.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <Button variant="outline" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => onNavigateToNode(n.id)}>VIEW IN GRAPH</Button>
                 <Button variant="destructive" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { handleDelete(n.id); setBoardExpanded(null); }}>DELETE</Button>
