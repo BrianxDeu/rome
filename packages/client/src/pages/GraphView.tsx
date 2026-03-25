@@ -26,6 +26,11 @@ function wsColor(ws: string, all: string[]): string {
   return WS_PALETTE[idx >= 0 ? idx % WS_PALETTE.length : 0];
 }
 
+function isGoalNode(node: Node): boolean {
+  const name = node.name.toLowerCase();
+  return name.includes("goal") || name.includes("mission");
+}
+
 // Layout for nodes without x/y
 function computeLayout(
   nodes: Node[],
@@ -34,8 +39,16 @@ function computeLayout(
   parentMap: Map<string, string>,
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
+
+  // Goal node at center
+  const goalNode = nodes.find(isGoalNode);
+  if (goalNode) {
+    positions.set(goalNode.id, { x: 0, y: 0 });
+  }
+
   const workstreams = new Map<string, Node[]>();
   for (const n of nodes) {
+    if (goalNode && n.id === goalNode.id) continue;
     const ws = n.workstream ?? "Other";
     const group = workstreams.get(ws) ?? [];
     group.push(n);
@@ -47,7 +60,7 @@ function computeLayout(
 
   for (const [, wsNodes] of workstreams) {
     const angleRad = (wsAngle / wsCount) * 2 * Math.PI - Math.PI / 2;
-    const wsRadius = 350;
+    const wsRadius = 450;
     const wsCenter = {
       x: Math.cos(angleRad) * wsRadius,
       y: Math.sin(angleRad) * wsRadius,
@@ -282,6 +295,8 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   }
 
   // Connected nodes for dimming
+  const goalNode = useMemo(() => storeNodes.find(isGoalNode) ?? null, [storeNodes]);
+
   const connectedIds = useMemo(() => {
     if (!selId) return new Set<string>();
     const ids = new Set<string>();
@@ -296,8 +311,17 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
       for (const sib of childrenMap.get(pid) ?? []) ids.add(sib);
     }
     for (const child of childrenMap.get(selId) ?? []) ids.add(child);
+    // Goal node connects to all cluster parents
+    if (goalNode) {
+      const clusterIds = [...childrenMap.keys()];
+      if (selId === goalNode.id) {
+        for (const cid of clusterIds) ids.add(cid);
+      } else if (clusterIds.includes(selId)) {
+        ids.add(goalNode.id);
+      }
+    }
     return ids;
-  }, [selId, storeEdges, parentMap, childrenMap]);
+  }, [selId, storeEdges, parentMap, childrenMap, goalNode]);
 
   return (
     <div className="canvas-area">
@@ -309,9 +333,9 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             <circle key={r} cx={0} cy={0} r={r} className="ring-circle" />
           ))}
 
-          {/* Workstream group boxes */}
+          {/* Workstream group boxes (dashed) */}
           {allWorkstreams.map((ws) => {
-            const gn = visibleNodes.filter((n) => n.workstream === ws);
+            const gn = visibleNodes.filter((n) => n.workstream === ws && !isGoalNode(n));
             if (gn.length < 2) return null;
             const pad = 50;
             const positions = gn.map((n) => posMap.get(n.id)).filter(Boolean) as { x: number; y: number }[];
@@ -320,13 +344,18 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             const x2 = Math.max(...positions.map((p) => p.x)) + pad;
             const y1 = Math.min(...positions.map((p) => p.y)) - pad - 20;
             const y2 = Math.max(...positions.map((p) => p.y)) + pad + 14;
+            const color = wsColor(ws, allWorkstreams);
             return (
-              <rect
-                key={ws}
-                x={x1} y={y1} width={x2 - x1} height={y2 - y1}
-                className="group-box"
-                style={{ stroke: wsColor(ws, allWorkstreams) }}
-              />
+              <g key={ws}>
+                <rect
+                  x={x1} y={y1} width={x2 - x1} height={y2 - y1}
+                  className="group-box"
+                  style={{ stroke: color, strokeDasharray: "8,4" }}
+                />
+                <text x={x1 + 10} y={y1 + 16} fontSize="10" fontWeight="600" fill={color} pointerEvents="none">
+                  {ws.toUpperCase()}
+                </text>
+              </g>
             );
           })}
 
@@ -415,13 +444,84 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
             );
           })}
 
-          {/* Nodes (non-cluster only) */}
+          {/* Connector lines from cluster parents to goal node */}
+          {(() => {
+            const goalNode = visibleNodes.find(isGoalNode);
+            if (!goalNode) return null;
+            const goalPos = posMap.get(goalNode.id);
+            if (!goalPos) return null;
+            const clusters = visibleNodes.filter((n) => isClusterNode(n.id, childrenMap));
+            return clusters.map((cluster) => {
+              const cPos = posMap.get(cluster.id);
+              if (!cPos) return null;
+              const dx = cPos.x - goalPos.x;
+              const dy = cPos.y - goalPos.y;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              const goalR = 36;
+              const clusterR = 12;
+              const fx = goalPos.x + (dx / dist) * goalR;
+              const fy = goalPos.y + (dy / dist) * goalR;
+              const tx = cPos.x - (dx / dist) * clusterR;
+              const ty = cPos.y - (dy / dist) * clusterR;
+              const clDim = selId && selId !== goalNode.id && selId !== cluster.id;
+              return (
+                <g key={`goal-link-${cluster.id}`} style={{ opacity: clDim ? 0.12 : 0.5, transition: "opacity 0.2s" }}>
+                  <line x1={fx} y1={fy} x2={tx} y2={ty} stroke="#1A1A1A" strokeWidth={1.5} strokeDasharray="6,4" />
+                </g>
+              );
+            });
+          })()}
+
+          {/* Goal node (large central black circle) */}
+          {(() => {
+            const goalNode = visibleNodes.find(isGoalNode);
+            if (!goalNode) return null;
+            const pos = posMap.get(goalNode.id) ?? { x: 0, y: 0 };
+            const r = 34;
+            const isSelected = selId === goalNode.id;
+            const dimmed = selId && !isSelected && !connectedIds.has(goalNode.id);
+            return (
+              <g
+                className="graph-node"
+                onMouseDown={(e) => onNodeMouseDown(e, goalNode.id)}
+                style={{ opacity: dimmed ? 0.25 : 1, transition: "opacity 0.2s" }}
+              >
+                <circle
+                  cx={pos.x} cy={pos.y} r={isSelected ? r + 3 : r}
+                  fill="#1A1A1A"
+                  stroke={isSelected ? "#B81917" : "#414042"}
+                  strokeWidth={isSelected ? 3 : 1.5}
+                />
+                <text
+                  x={pos.x} y={pos.y - 4}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight="700"
+                  fill="#FFFFFF"
+                  pointerEvents="none"
+                >
+                  {goalNode.name.length > 22 ? goalNode.name.slice(0, 20) + "…" : goalNode.name}
+                </text>
+                <text
+                  x={pos.x} y={pos.y + 10}
+                  textAnchor="middle"
+                  fontSize="7"
+                  fontWeight="400"
+                  fill="#999"
+                  pointerEvents="none"
+                >
+                  GOAL
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Nodes (non-cluster, non-goal) */}
           {visibleNodes
-            .filter((n) => !isClusterNode(n.id, childrenMap))
+            .filter((n) => !isClusterNode(n.id, childrenMap) && !isGoalNode(n))
             .map((node) => {
               const pos = posMap.get(node.id) ?? { x: 0, y: 0 };
-              const isGoal = node.name.toLowerCase().includes("goal") || node.name.toLowerCase().includes("mission");
-              const r = isGoal ? 14 : 7;
+              const r = 7;
               const isSelected = selId === node.id;
               const dimmed = selId && !isSelected && !connectedIds.has(node.id);
               return (
@@ -443,8 +543,8 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
                   <text
                     x={pos.x} y={pos.y + r + 12}
                     textAnchor="middle"
-                    fontSize={isGoal ? "11" : "9"}
-                    fontWeight={isSelected ? "700" : isGoal ? "600" : "400"}
+                    fontSize="9"
+                    fontWeight={isSelected ? "700" : "400"}
                     fill={isSelected ? "#1A1A1A" : "#414042"}
                     pointerEvents="none"
                   >
