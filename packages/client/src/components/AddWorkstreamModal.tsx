@@ -17,20 +17,17 @@ interface AddWorkstreamModalProps {
   onClose: () => void;
 }
 
-const PRESET_COLORS = [
-  { name: "Red", hex: "#B81917" },
-  { name: "Blue", hex: "#3B82F6" },
-  { name: "Purple", hex: "#8B5CF6" },
-  { name: "Green", hex: "#16a34a" },
-  { name: "Amber", hex: "#f59e0b" },
-  { name: "Cyan", hex: "#06b6d4" },
-];
+const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
 
 export function AddWorkstreamModal({ onClose }: AddWorkstreamModalProps) {
   const addNode = useGraphStore((s) => s.addNode);
+  const nodes = useGraphStore((s) => s.nodes);
+
+  const existingWorkstreams = [...new Set(nodes.map((n) => n.workstream).filter(Boolean))].sort();
+  const nextColorIdx = existingWorkstreams.length % WS_PALETTE.length;
+  const assignedColor = WS_PALETTE[nextColorIdx];
 
   const [name, setName] = useState("");
-  const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0].hex);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit() {
@@ -83,33 +80,14 @@ export function AddWorkstreamModal({ onClose }: AddWorkstreamModalProps) {
           />
         </div>
 
-        <div>
-          <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Color</Label>
-          <div className="flex gap-2.5">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c.hex}
-                title={c.name}
-                onClick={() => setSelectedColor(c.hex)}
-                className="h-8 w-8 rounded-md transition-all"
-                style={{
-                  background: c.hex,
-                  border: selectedColor === c.hex ? "3px solid #1A1A1A" : "3px solid transparent",
-                }}
-              />
-            ))}
-          </div>
+        {/* Preview with auto-assigned color */}
+        <div className="flex items-center gap-2 rounded-md bg-[#FAFAFA] p-2.5">
+          <div className="h-3 w-3 shrink-0 rounded-sm" style={{ background: assignedColor }} />
+          <span className="font-[Tomorrow] text-[13px] font-semibold" style={{ color: assignedColor }}>
+            {name.trim() || "New Workstream"}
+          </span>
+          <span className="ml-auto text-[9px] text-[#999]">color auto-assigned</span>
         </div>
-
-        {/* Preview */}
-        {name.trim() && (
-          <div className="flex items-center gap-2 rounded-md bg-[#FAFAFA] p-2.5">
-            <div className="h-3 w-3 shrink-0 rounded-sm" style={{ background: selectedColor }} />
-            <span className="font-[Tomorrow] text-[13px] font-semibold" style={{ color: selectedColor }}>
-              {name.trim()}
-            </span>
-          </div>
-        )}
 
         <DialogFooter className="flex-row justify-end gap-2">
           <Button variant="outline" size="sm" className="font-[Tomorrow] text-xs" onClick={onClose}>Cancel</Button>
