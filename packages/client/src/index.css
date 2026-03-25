@@ -81,11 +81,11 @@ a {
 .logo { font-size:11px; font-weight:600; letter-spacing:2.5px; text-transform:uppercase; display:flex; align-items:center; gap:10px; color:#1A1A1A; }
 .logo-diamond { width:16px; height:16px; background:#B81917; transform:rotate(45deg); border-radius:2px; flex-shrink:0; }
 .tabs { display:flex; gap:4px; }
-.tab { padding:8px 18px; font-size:10px; letter-spacing:2px; text-transform:uppercase; background:none; border:none; color:#999; cursor:pointer; border-bottom:2px solid transparent; font-family:'Tomorrow',sans-serif; transition:color .15s; }
+.tab { padding:12px 18px; font-size:10px; letter-spacing:2px; text-transform:uppercase; background:none; border:none; color:#999; cursor:pointer; border-bottom:2px solid transparent; font-family:'Tomorrow',sans-serif; transition:color .15s; min-height:44px; }
 .tab:hover { color:#1A1A1A; }
 .tab.active { color:#B81917; border-bottom-color:#B81917; }
 .top-actions { display:flex; gap:6px; align-items:center; }
-.btn { padding:6px 12px; font-size:9px; letter-spacing:1px; text-transform:uppercase; background:#F5F5F5; border:1px solid #E0E0E0; color:#1A1A1A; cursor:pointer; font-family:'Tomorrow',sans-serif; transition:all .15s; }
+.btn { padding:10px 14px; font-size:9px; letter-spacing:1px; text-transform:uppercase; background:#F5F5F5; border:1px solid #E0E0E0; color:#1A1A1A; cursor:pointer; font-family:'Tomorrow',sans-serif; transition:all .15s; min-height:36px; }
 .btn:hover { border-color:#B81917; }
 .btn.primary { background:#B81917; border-color:#B81917; color:#FFF; }
 .btn.primary:hover { background:#9a1514; }
