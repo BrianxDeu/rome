@@ -53,10 +53,18 @@ export const useGraphStore = create<GraphState>((set) => ({
     })),
 
   addNode: (node) =>
-    set((state) => ({ nodes: [...state.nodes, node] })),
+    set((state) => ({
+      nodes: state.nodes.some((n) => n.id === node.id)
+        ? state.nodes.map((n) => (n.id === node.id ? node : n))
+        : [...state.nodes, node],
+    })),
 
   addEdge: (edge) =>
-    set((state) => ({ edges: [...state.edges, edge] })),
+    set((state) => ({
+      edges: state.edges.some((e) => e.id === edge.id)
+        ? state.edges.map((e) => (e.id === edge.id ? edge : e))
+        : [...state.edges, edge],
+    })),
 
   removeEdge: (id) =>
     set((state) => ({ edges: state.edges.filter((e) => e.id !== id) })),
