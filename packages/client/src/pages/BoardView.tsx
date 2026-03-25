@@ -427,22 +427,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   />
                 </div>
               </div>
-              {/* Dependencies */}
+              {/* Dependencies & Blockers */}
               {(() => {
                 const depTypes = new Set(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared"]);
                 const incoming = edges.filter((e) => e.targetId === n.id && depTypes.has(e.type));
                 const outgoing = edges.filter((e) => e.sourceId === n.id && depTypes.has(e.type));
-                const otherNodes = nodes.filter((nd) => nd.id !== n.id);
+                // Only show leaf nodes as dependency targets (not workstream headers or cluster parents)
+                const candidateNodes = leafNodes.filter((nd) => nd.id !== n.id);
                 return (
                   <div style={{ marginTop: 12 }}>
-                    {(incoming.length > 0 || outgoing.length > 0) && (
-                      <Label className="dp-label" style={{ marginBottom: 6 }}>Dependencies</Label>
-                    )}
+                    <Label className="dp-label" style={{ marginBottom: 6 }}>Dependencies &amp; Blockers</Label>
                     {incoming.map((e) => {
                       const src = nodes.find((nd) => nd.id === e.sourceId);
                       return (
                         <div key={e.id} className="dp-dep">
-                          <span style={{ fontSize: 9 }}>{src?.name ?? "?"} <span style={{ color: "#B81917" }}>{e.type}</span> this</span>
+                          <span style={{ fontSize: 9 }}>{src?.name ?? "?"} <span style={{ color: e.type === "blocker" || e.type === "blocks" ? "#B81917" : "#f59e0b" }}>{e.type}</span> this</span>
                           <button onClick={async () => {
                             try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
                           }}>&times;</button>
@@ -453,28 +452,41 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       const tgt = nodes.find((nd) => nd.id === e.targetId);
                       return (
                         <div key={e.id} className="dp-dep">
-                          <span style={{ fontSize: 9 }}>this <span style={{ color: "#3B82F6" }}>{e.type}</span> {tgt?.name ?? "?"}</span>
+                          <span style={{ fontSize: 9 }}>this <span style={{ color: e.type === "blocker" || e.type === "blocks" ? "#B81917" : "#3B82F6" }}>{e.type}</span> {tgt?.name ?? "?"}</span>
                           <button onClick={async () => {
                             try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
                           }}>&times;</button>
                         </div>
                       );
                     })}
-                    <div style={{ marginTop: 6 }}>
-                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
-                        const targetId = ev.target.value;
-                        if (!targetId) return;
+                    {incoming.length === 0 && outgoing.length === 0 && (
+                      <div style={{ fontSize: 9, color: "#BBB", marginBottom: 4 }}>No dependencies yet</div>
+                    )}
+                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                      <select className="dp-input" style={{ fontSize: 9, flex: 1 }} value="" onChange={async (ev) => {
+                        const val = ev.target.value;
+                        if (!val) return;
+                        const [edgeType, targetId] = val.split("|");
                         try {
                           const edge = await api<Edge>("/edges", {
                             method: "POST",
-                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: "depends_on" }),
+                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: edgeType }),
                           });
                           addEdge(edge);
+                          // Refetch to sync
+                          const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+                          setNodes(graph.nodes);
+                          setEdges(graph.edges);
                         } catch (err) { console.error("[BoardView] add dep:", err); }
                         ev.target.value = "";
                       }}>
-                        <option value="">+ Add dependency...</option>
-                        {otherNodes.map((nd) => <option key={nd.id} value={nd.id}>{nd.name}</option>)}
+                        <option value="">+ Add...</option>
+                        <optgroup label="Blocks">
+                          {candidateNodes.map((nd) => <option key={`b-${nd.id}`} value={`blocker|${nd.id}`}>{nd.name}</option>)}
+                        </optgroup>
+                        <optgroup label="Depends on">
+                          {candidateNodes.map((nd) => <option key={`d-${nd.id}`} value={`depends_on|${nd.id}`}>{nd.name}</option>)}
+                        </optgroup>
                       </select>
                     </div>
                   </div>
