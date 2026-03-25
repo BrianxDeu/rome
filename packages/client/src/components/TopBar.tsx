@@ -43,11 +43,11 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
         <div className="logo-diamond" />
         DXD HALO OPS
       </div>
-      <div style={{ display: "flex", gap: 0 }}>
+      <div className="tabs">
         {tabs.map((t) => (
           <button
             key={t}
-            className={`tab${activeView === t ? " active" : ""}`}
+            className={`tab ${activeView === t ? "active" : ""}`}
             onClick={() => onViewChange(t)}
           >
             {t.toUpperCase()}
@@ -55,12 +55,8 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
         ))}
       </div>
       <div className="top-actions">
-        {onAddNode && (
-          <button className="btn" onClick={onAddNode}>+ NODE</button>
-        )}
-        {onAddWorkstream && (
-          <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>
-        )}
+        {onAddNode && <button className="btn" onClick={onAddNode}>+ NODE</button>}
+        {onAddWorkstream && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
         <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
         {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}
         <button className="btn" onClick={logout}>LOGOUT</button>
