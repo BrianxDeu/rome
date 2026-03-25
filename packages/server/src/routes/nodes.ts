@@ -1,9 +1,26 @@
 import { Router } from "express";
 import { eq, and, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { nodes, edges } from "@rome/shared/schema";
+import { nodes, edges, users } from "@rome/shared/schema";
 import type { Db } from "../db.js";
 import { broadcast } from "../socket.js";
+
+/** Ensure the authenticated user exists in the local DB (handles cross-env tokens) */
+function ensureUser(db: Db, userId: string) {
+  const existing = db.select().from(users).where(eq(users.id, userId)).get();
+  if (!existing) {
+    const now = new Date().toISOString();
+    db.insert(users).values({
+      id: userId,
+      username: `user-${userId.slice(0, 8)}`,
+      email: `${userId.slice(0, 8)}@local`,
+      passwordHash: "",
+      role: "member",
+      createdAt: now,
+      updatedAt: now,
+    }).run();
+  }
+}
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -91,28 +108,36 @@ export function nodeRoutes(db: Db): Router {
     const now = new Date().toISOString();
     const data = parsed.data;
 
-    db.insert(nodes)
-      .values({
-        id,
-        name: data.name,
-        status: data.status ?? "not_started",
-        priority: data.priority ?? "P2",
-        startDate: data.start_date ?? null,
-        endDate: data.end_date ?? null,
-        budget: data.budget ?? null,
-        deliverable: data.deliverable ?? null,
-        notes: data.notes ?? null,
-        raci: data.raci ? (typeof data.raci === "string" ? data.raci : JSON.stringify(data.raci)) : null,
-        workstream: data.workstream ?? null,
-        x: data.x ?? null,
-        y: data.y ?? null,
-        positionPinned: data.position_pinned ? 1 : 0,
-        attachments: data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null,
-        createdBy: req.auth!.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run();
+    ensureUser(db, req.auth!.userId);
+
+    try {
+      db.insert(nodes)
+        .values({
+          id,
+          name: data.name,
+          status: data.status ?? "not_started",
+          priority: data.priority ?? "P2",
+          startDate: data.start_date ?? null,
+          endDate: data.end_date ?? null,
+          budget: data.budget ?? null,
+          deliverable: data.deliverable ?? null,
+          notes: data.notes ?? null,
+          raci: data.raci ? (typeof data.raci === "string" ? data.raci : JSON.stringify(data.raci)) : null,
+          workstream: data.workstream ?? null,
+          x: data.x ?? null,
+          y: data.y ?? null,
+          positionPinned: data.position_pinned ? 1 : 0,
+          attachments: data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null,
+          createdBy: req.auth!.userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+    } catch (err) {
+      console.error("[POST /nodes] insert failed:", err);
+      res.status(500).json({ error: "Failed to create node" });
+      return;
+    }
 
     const node = db.select().from(nodes).where(eq(nodes.id, id)).get();
     broadcast({ type: "node:created", payload: node as unknown as Record<string, unknown> });
