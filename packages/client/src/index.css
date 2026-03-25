@@ -95,15 +95,11 @@ a {
 .main { display:flex; height:calc(100vh - 52px); overflow:hidden; }
 
 /* Graph */
-.canvas-area { flex:1; position:relative; overflow:hidden; background:#FAFAFA; }
+.canvas-area { flex:1; position:relative; overflow:hidden; background:#FEFEFE; }
 .canvas-area svg { width:100%; height:100%; }
 .graph-node { cursor:grab; }
 .graph-node:active { cursor:grabbing; }
 .graph-node text { font-family:'Tomorrow',sans-serif; }
-.edge-line { stroke:rgba(0,0,0,0.12); stroke-width:1.2; fill:none; }
-.edge-arrow { fill:rgba(0,0,0,0.2); }
-.ring-circle { fill:none; stroke:#E7E7E7; stroke-width:0.8; stroke-dasharray:4,4; }
-.group-box { fill:none; stroke-width:1; stroke-dasharray:6,4; rx:12; opacity:0.35; }
 
 /* Detail Panel */
 .detail-panel { width:360px; border-left:1px solid #E7E7E7; background:#FFF; overflow-y:auto; flex-shrink:0; }
