@@ -2,6 +2,16 @@ import { useState } from "react";
 import { api } from "../api";
 import { useGraphStore } from "../stores/graphStore";
 import type { Node } from "@rome/shared";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 interface AddNodeModalProps {
   defaultWorkstream?: string;
@@ -100,23 +110,21 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
   ];
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        <div style={header}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Add Node</span>
-          <button style={closeBtn} onClick={onClose}>&times;</button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-[400px] font-[Tomorrow]" onKeyDown={handleKeyDown}>
+        <DialogHeader>
+          <DialogTitle className="font-[Tomorrow] text-[15px] font-bold">Add Node</DialogTitle>
+        </DialogHeader>
 
         {/* Progress dots */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, justifyContent: "center" }}>
+        <div className="flex justify-center gap-1.5">
           {steps.map((s, i) => (
             <div
               key={i}
+              className="h-2 w-2 rounded-full transition-colors"
               style={{
-                width: 8, height: 8, borderRadius: "50%",
                 background: i <= step ? "#B81917" : "#E7E7E7",
                 cursor: i <= step ? "pointer" : "default",
-                transition: "background 0.2s",
               }}
               onClick={() => { if (i <= step) setStep(i); }}
               title={s.label}
@@ -126,11 +134,11 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 0: Name */}
         {step >= 0 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Name *</label>
-            <input
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Name *</Label>
+            <Input
               autoFocus={step === 0}
-              style={inputStyle}
+              className="font-[Tomorrow] text-[13px]"
               placeholder="What needs to be done?"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -140,11 +148,11 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 1: Workstream */}
         {step >= 1 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Workstream</label>
-            <input
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Workstream</Label>
+            <Input
               autoFocus={step === 1}
-              style={inputStyle}
+              className="font-[Tomorrow] text-[13px]"
               list="ws-suggestions"
               placeholder="e.g. Design, Engineering..."
               value={workstream}
@@ -160,21 +168,20 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 2: Priority */}
         {step >= 2 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Priority</label>
-            <div style={{ display: "flex", gap: 6 }}>
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Priority</Label>
+            <div className="flex gap-1.5">
               {PRESET_PRIORITIES.map((p) => (
-                <button
+                <Button
                   key={p}
-                  style={{
-                    ...priorityBtn,
-                    background: priority === p ? "#B81917" : "#F5F5F5",
-                    color: priority === p ? "#fff" : "#1A1A1A",
-                  }}
+                  variant={priority === p ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1 font-[Tomorrow] text-xs font-semibold"
+                  style={priority === p ? { background: "#B81917", borderColor: "#B81917" } : {}}
                   onClick={() => setPriority(p)}
                 >
                   {p}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -182,20 +189,20 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 3: Dates */}
         {step >= 3 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Dates</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <input
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Dates</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
                 autoFocus={step === 3}
                 type="date"
-                style={inputStyle}
+                className="font-[Tomorrow] text-[13px]"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 placeholder="Start"
               />
-              <input
+              <Input
                 type="date"
-                style={inputStyle}
+                className="font-[Tomorrow] text-[13px]"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 placeholder="End"
@@ -206,12 +213,12 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 4: Budget */}
         {step >= 4 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Budget</label>
-            <input
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Budget</Label>
+            <Input
               autoFocus={step === 4}
               type="number"
-              style={inputStyle}
+              className="font-[Tomorrow] text-[13px]"
               placeholder="$0"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
@@ -221,11 +228,11 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
         {/* Step 5: Responsible */}
         {step >= 5 && (
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Responsible</label>
-            <input
+          <div>
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Responsible</Label>
+            <Input
               autoFocus={step === 5}
-              style={inputStyle}
+              className="font-[Tomorrow] text-[13px]"
               placeholder="Who owns this?"
               value={responsible}
               onChange={(e) => setResponsible(e.target.value)}
@@ -234,128 +241,35 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         )}
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+        <DialogFooter className="flex-row justify-end gap-2">
           {step < 5 && (
-            <button style={skipBtn} onClick={() => setStep(5)}>
+            <Button variant="outline" size="sm" className="font-[Tomorrow] text-xs" onClick={() => setStep(5)}>
               Skip to end
-            </button>
+            </Button>
           )}
           {step < 5 ? (
-            <button
-              style={{ ...actionBtn, opacity: step === 0 && !name.trim() ? 0.5 : 1 }}
+            <Button
+              size="sm"
+              className="font-[Tomorrow] text-xs font-semibold"
+              style={{ background: "#B81917" }}
               onClick={advance}
               disabled={step === 0 && !name.trim()}
             >
               Next
-            </button>
+            </Button>
           ) : (
-            <button
-              style={{ ...actionBtn, opacity: !name.trim() || saving ? 0.5 : 1 }}
+            <Button
+              size="sm"
+              className="font-[Tomorrow] text-xs font-semibold"
+              style={{ background: "#B81917" }}
               onClick={handleSubmit}
               disabled={!name.trim() || saving}
             >
               {saving ? "Adding..." : "Add Node"}
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const overlay: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.4)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-};
-
-const modal: React.CSSProperties = {
-  background: "#fff",
-  borderRadius: 10,
-  padding: "20px 24px",
-  width: 400,
-  maxHeight: "80vh",
-  overflowY: "auto",
-  boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
-  fontFamily: "Tomorrow, sans-serif",
-};
-
-const header: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 12,
-};
-
-const closeBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  fontSize: 20,
-  cursor: "pointer",
-  color: "#999",
-  lineHeight: 1,
-};
-
-const fieldGroup: React.CSSProperties = {
-  marginBottom: 12,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 10,
-  color: "#999",
-  letterSpacing: 0.5,
-  display: "block",
-  marginBottom: 4,
-  textTransform: "uppercase",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  background: "#FAFAFA",
-  border: "1px solid #E7E7E7",
-  borderRadius: 4,
-  fontFamily: "Tomorrow, sans-serif",
-  fontSize: 13,
-  color: "#1A1A1A",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const priorityBtn: React.CSSProperties = {
-  flex: 1,
-  padding: "6px 0",
-  border: "1px solid #E7E7E7",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 600,
-  fontFamily: "Tomorrow, sans-serif",
-};
-
-const actionBtn: React.CSSProperties = {
-  padding: "8px 20px",
-  background: "#B81917",
-  color: "#fff",
-  border: "none",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 600,
-  fontFamily: "Tomorrow, sans-serif",
-};
-
-const skipBtn: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "none",
-  color: "#999",
-  border: "1px solid #E7E7E7",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 12,
-  fontFamily: "Tomorrow, sans-serif",
-};

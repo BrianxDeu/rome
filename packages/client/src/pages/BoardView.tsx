@@ -12,6 +12,12 @@ import {
   isClusterNode,
   parseRaci,
 } from "../constants";
+import { Card, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Label } from "../components/ui/label";
 
 const statuses = Object.keys(STATUSES);
 const priorities = Object.keys(PRIORITIES);
@@ -320,9 +326,9 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     const raciData = parseRaci(n.raci);
 
     return (
-      <div
+      <Card
         key={n.id}
-        className={`board-card ${isExp ? "expanded" : ""}`}
+        className={`board-card flex-row gap-0 rounded-md py-0 ${isExp ? "expanded" : ""}`}
         draggable
         onDragStart={(e) => onBoardDragStart(e, n.id, sectionKey, clusterId)}
         onDragEnd={onBoardDragEnd}
@@ -333,20 +339,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       >
         <div className="board-card-drag" onMouseDown={(e) => e.stopPropagation()}>&#8942;&#8942;</div>
         <div className="board-card-accent" style={{ background: pColor }} />
-        <div className="board-card-main">
+        <CardContent className="board-card-main flex-1 p-[10px_14px]">
           <div className="board-card-top">
             <div className="board-card-title">{n.name}</div>
             <div className="board-card-meta">
-              <span className="board-card-chip" style={{ background: pColor + "18", color: pColor }}>{n.priority}</span>
-              <span className="board-card-chip" style={{ background: sColor + "18", color: sColor }}>{statusLabel(n.status)}</span>
+              <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{n.priority}</Badge>
+              <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>{statusLabel(n.status)}</Badge>
               {raciData.responsible && <span className="board-card-owner">{raciData.responsible}</span>}
             </div>
           </div>
           {isExp && (
             <div className="board-card-body" onClick={(e) => e.stopPropagation()}>
               <div className="dp-field">
-                <label className="dp-label">Notes</label>
-                <textarea
+                <Label className="dp-label">Notes</Label>
+                <Textarea
+                  className="font-[Tomorrow] text-[10px]"
                   value={n.notes ?? ""}
                   placeholder="Freeform notes, links, context..."
                   onChange={(e) => handleFieldChange(n.id, "notes", e.target.value)}
@@ -354,8 +361,9 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 />
               </div>
               <div className="dp-field" style={{ marginTop: 8 }}>
-                <label className="dp-label">Deliverables</label>
-                <textarea
+                <Label className="dp-label">Deliverables</Label>
+                <Textarea
+                  className="font-[Tomorrow] text-[10px]"
                   value={n.deliverable ?? ""}
                   placeholder="What does done look like?"
                   onChange={(e) => handleFieldChange(n.id, "deliverable", e.target.value)}
@@ -364,20 +372,20 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               </div>
               <div className="board-card-fields">
                 <div className="dp-field">
-                  <label className="dp-label">Status</label>
+                  <Label className="dp-label">Status</Label>
                   <select className="dp-input" value={n.status} onChange={(e) => handleSelectChange(n.id, "status", e.target.value)}>
                     {statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                   </select>
                 </div>
                 <div className="dp-field">
-                  <label className="dp-label">Priority</label>
+                  <Label className="dp-label">Priority</Label>
                   <select className="dp-input" value={n.priority} onChange={(e) => handleSelectChange(n.id, "priority", e.target.value)}>
                     {priorities.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="dp-field">
-                  <label className="dp-label">Owner</label>
-                  <input className="dp-input" value={raciData.responsible}
+                  <Label className="dp-label">Owner</Label>
+                  <Input className="font-[Tomorrow] text-[11px]" value={raciData.responsible}
                     onChange={(e) => {
                       const next = { ...raciData, responsible: e.target.value };
                       handleFieldChange(n.id, "raci", JSON.stringify(next));
@@ -389,8 +397,8 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   />
                 </div>
                 <div className="dp-field">
-                  <label className="dp-label">Budget</label>
-                  <input type="number" className="dp-input" value={n.budget ?? ""}
+                  <Label className="dp-label">Budget</Label>
+                  <Input type="number" className="font-[Tomorrow] text-[11px]" value={n.budget ?? ""}
                     onChange={(e) => handleFieldChange(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
                     onBlur={(e) => handleFieldBlur(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
                   />
@@ -398,33 +406,33 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               </div>
               <div className="board-card-fields" style={{ marginTop: 8 }}>
                 <div className="dp-field">
-                  <label className="dp-label">Start</label>
-                  <input type="date" className="dp-input" value={n.startDate ?? ""}
+                  <Label className="dp-label">Start</Label>
+                  <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.startDate ?? ""}
                     onChange={(e) => { handleFieldChange(n.id, "startDate", e.target.value || null); patchNode(n.id, "startDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
-                  <label className="dp-label">End</label>
-                  <input type="date" className="dp-input" value={n.endDate ?? ""}
+                  <Label className="dp-label">End</Label>
+                  <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.endDate ?? ""}
                     onChange={(e) => { handleFieldChange(n.id, "endDate", e.target.value || null); patchNode(n.id, "endDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
-                  <label className="dp-label">Workstream</label>
-                  <input className="dp-input" value={n.workstream ?? ""}
+                  <Label className="dp-label">Workstream</Label>
+                  <Input className="font-[Tomorrow] text-[11px]" value={n.workstream ?? ""}
                     onChange={(e) => handleFieldChange(n.id, "workstream", e.target.value)}
                     onBlur={(e) => handleFieldBlur(n.id, "workstream", e.target.value)}
                   />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button className="btn" style={{ fontSize: 8 }} onClick={() => onNavigateToNode(n.id)}>VIEW IN GRAPH</button>
-                <button className="btn danger" style={{ fontSize: 8 }} onClick={() => { handleDelete(n.id); setBoardExpanded(null); }}>DELETE</button>
+                <Button variant="outline" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => onNavigateToNode(n.id)}>VIEW IN GRAPH</Button>
+                <Button variant="destructive" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { handleDelete(n.id); setBoardExpanded(null); }}>DELETE</Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -448,11 +456,11 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
             if (e.key === "Escape") { setBoardAddGroup(null); setBoardAddLabel(""); }
           }}
         />
-        <button className="btn primary" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => {
+        <Button size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => {
           if (isGroupAdd) boardAddCluster(workstream);
           else boardAddNode(workstream, clusterId);
-        }}>ADD</button>
-        <button className="btn" style={{ fontSize: 8, padding: "4px 10px" }} onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</button>
+        }}>ADD</Button>
+        <Button variant="outline" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</Button>
       </div>
     ) : (
       <div className="board-add-row" onClick={() => setBoardAddGroup(key)}>

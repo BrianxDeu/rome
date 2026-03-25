@@ -11,6 +11,11 @@ import {
   statusLabel,
   parseRaci,
 } from "../constants";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Label } from "./ui/label";
 
 const statuses = Object.keys(STATUSES);
 const priorities = Object.keys(PRIORITIES);
@@ -158,65 +163,65 @@ export function NodePanel() {
       <div className="dp-header">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div className="dp-title">{form.name}</div>
-          <button className="btn" style={{ fontSize: 14, padding: "2px 8px", lineHeight: 1 }} onClick={() => selectNode(null)}>x</button>
+          <Button variant="ghost" size="icon-xs" onClick={() => selectNode(null)}>x</Button>
         </div>
-        <span className="dp-badge" style={{ background: pColor + "18", color: pColor }}>{form.priority}</span>
-        <span className="dp-badge" style={{ marginLeft: 4, background: sColor + "18", color: sColor }}>
+        <Badge variant="outline" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{form.priority}</Badge>
+        <Badge variant="outline" className="ml-1 font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>
           {statusLabel(form.status ?? "not_started")}
-        </span>
+        </Badge>
       </div>
       <div className="dp-body">
         <div className="dp-field">
-          <label className="dp-label">Status</label>
+          <Label className="dp-label">Status</Label>
           <select className="dp-input" value={form.status ?? "not_started"} onChange={(e) => set("status", e.target.value)}>
             {statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
         </div>
         <div className="dp-field">
-          <label className="dp-label">Priority</label>
+          <Label className="dp-label">Priority</Label>
           <select className="dp-input" value={form.priority ?? "P2"} onChange={(e) => set("priority", e.target.value)}>
             {priorities.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         <div className="dp-field">
-          <label className="dp-label">Workstream</label>
-          <input className="dp-input" value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
+          <Label className="dp-label">Workstream</Label>
+          <Input className="font-[Tomorrow] text-[11px]" value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
         </div>
         <div className="dp-row">
           <div className="dp-field">
-            <label className="dp-label">Start</label>
-            <input type="date" className="dp-input" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
+            <Label className="dp-label">Start</Label>
+            <Input type="date" className="font-[Tomorrow] text-[11px]" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
           </div>
           <div className="dp-field">
-            <label className="dp-label">End</label>
-            <input type="date" className="dp-input" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
+            <Label className="dp-label">End</Label>
+            <Input type="date" className="font-[Tomorrow] text-[11px]" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
           </div>
         </div>
         <div className="dp-field">
-          <label className="dp-label">Budget ($)</label>
-          <input type="number" className="dp-input" value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
+          <Label className="dp-label">Budget ($)</Label>
+          <Input type="number" className="font-[Tomorrow] text-[11px]" value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
         </div>
         <div className="dp-field">
-          <label className="dp-label">Deliverables</label>
-          <textarea className="dp-textarea" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
+          <Label className="dp-label">Deliverables</Label>
+          <Textarea className="font-[Tomorrow] text-[11px]" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
         </div>
         <div className="dp-field">
-          <label className="dp-label">Notes</label>
-          <textarea className="dp-textarea" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+          <Label className="dp-label">Notes</Label>
+          <Textarea className="font-[Tomorrow] text-[11px]" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
         </div>
         <div className="dp-field">
-          <label className="dp-label">RACI</label>
+          <Label className="dp-label">RACI</Label>
           <div className="dp-row">
-            <div><label className="dp-label" style={{ fontSize: 7 }}>R</label><input className="dp-input" value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} /></div>
-            <div><label className="dp-label" style={{ fontSize: 7 }}>A</label><input className="dp-input" value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 7 }}>R</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 7 }}>A</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} /></div>
           </div>
           <div className="dp-row" style={{ marginTop: 4 }}>
-            <div><label className="dp-label" style={{ fontSize: 7 }}>C</label><input className="dp-input" value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} /></div>
-            <div><label className="dp-label" style={{ fontSize: 7 }}>I</label><input className="dp-input" value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 7 }}>C</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 7 }}>I</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} /></div>
           </div>
         </div>
         <div className="dp-field">
-          <label className="dp-label">This depends on (incoming)</label>
+          <Label className="dp-label">This depends on (incoming)</Label>
           {incomingEdges.map((e) => (
             <div key={e.id} className="dp-dep">
               <span style={{ flex: 1 }}>{nodeName(e.sourceId)}</span>
@@ -227,7 +232,7 @@ export function NodePanel() {
               >
                 {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
-              <button onClick={() => handleRemoveEdge(e.id)}>x</button>
+              <Button variant="ghost" size="icon-xs" className="h-5 w-5 text-[#999] hover:text-[#B81917]" onClick={() => handleRemoveEdge(e.id)}>x</Button>
             </div>
           ))}
           <div style={{ marginTop: 6 }}>
@@ -238,7 +243,7 @@ export function NodePanel() {
           </div>
         </div>
         <div className="dp-field">
-          <label className="dp-label">Blocks / feeds into (outgoing)</label>
+          <Label className="dp-label">Blocks / feeds into (outgoing)</Label>
           {outgoingEdges.map((e) => (
             <div key={e.id} className="dp-dep">
               <span style={{ flex: 1 }}>{nodeName(e.targetId)}</span>
@@ -249,7 +254,7 @@ export function NodePanel() {
               >
                 {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
-              <button onClick={() => handleRemoveEdge(e.id)}>x</button>
+              <Button variant="ghost" size="icon-xs" className="h-5 w-5 text-[#999] hover:text-[#B81917]" onClick={() => handleRemoveEdge(e.id)}>x</Button>
             </div>
           ))}
           <div style={{ marginTop: 6 }}>
@@ -261,9 +266,9 @@ export function NodePanel() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           {dirty && (
-            <button className="btn primary" style={{ flex: 1 }} onClick={saveAll}>SAVE</button>
+            <Button className="flex-1 font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={saveAll}>SAVE</Button>
           )}
-          <button className="btn danger" style={{ width: "100%" }} onClick={handleDelete}>DELETE NODE</button>
+          <Button variant="destructive" className="w-full font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={handleDelete}>DELETE NODE</Button>
         </div>
       </div>
     </div>

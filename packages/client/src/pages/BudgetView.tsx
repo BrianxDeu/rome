@@ -9,6 +9,17 @@ import {
   parseRaci,
 } from "../constants";
 import type { Node } from "@rome/shared";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableFooter,
+} from "../components/ui/table";
+import { Input } from "../components/ui/input";
+import { Badge } from "../components/ui/badge";
 
 // Workstream colors
 const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
@@ -122,23 +133,29 @@ export function BudgetView() {
       </div>
       <div className="budget-section">
         <div className="budget-section-title">By Priority</div>
-        <table className="budget-table">
-          <thead>
-            <tr><th>Priority</th><th>Count</th><th>Budget</th></tr>
-          </thead>
-          <tbody>
+        <Table className="font-[Tomorrow]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Priority</TableHead>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Count</TableHead>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Budget</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {["P0", "P1", "P2", "P3"].map((p) => {
               const pn = leafNodes.filter((n) => n.priority === p);
               return (
-                <tr key={p}>
-                  <td style={{ color: priorityColor(p), fontWeight: 600 }}>{p}</td>
-                  <td>{pn.length}</td>
-                  <td>{fmt$(pn.reduce((s, n) => s + (n.budget || 0), 0))}</td>
-                </tr>
+                <TableRow key={p}>
+                  <TableCell>
+                    <Badge variant="outline" className="font-[Tomorrow] text-[10px] font-semibold" style={{ color: priorityColor(p), borderColor: priorityColor(p) + "40" }}>{p}</Badge>
+                  </TableCell>
+                  <TableCell className="text-[10px]">{pn.length}</TableCell>
+                  <TableCell className="text-[10px]">{fmt$(pn.reduce((s, n) => s + (n.budget || 0), 0))}</TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <div className="budget-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E7E7E7", paddingBottom: 6, marginBottom: 12 }}>
@@ -148,43 +165,50 @@ export function BudgetView() {
             {workstreams.map((ws) => <option key={ws} value={ws}>{ws}</option>)}
           </select>
         </div>
-        <table className="budget-table">
-          <thead>
-            <tr>
-              <th onClick={() => toggleBudgetSort("label")}>Task {budgetSort === "label" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</th>
-              <th onClick={() => toggleBudgetSort("priority")}>Priority {budgetSort === "priority" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</th>
-              <th>Workstream</th>
-              <th>Status</th>
-              <th>Owner</th>
-              <th onClick={() => toggleBudgetSort("budget")}>Budget {budgetSort === "budget" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="font-[Tomorrow]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("label")}>Task {budgetSort === "label" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("priority")}>Priority {budgetSort === "priority" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Workstream</TableHead>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Status</TableHead>
+              <TableHead className="text-[8px] tracking-[1px] uppercase">Owner</TableHead>
+              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("budget")}>Budget {budgetSort === "budget" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {budgetItems.map((n) => (
-              <tr key={n.id} style={{ cursor: "pointer" }}>
-                <td onClick={() => selectNode(n)}>{n.name}</td>
-                <td style={{ color: priorityColor(n.priority) }}>{n.priority}</td>
-                <td>{n.workstream}</td>
-                <td>{statusLabel(n.status)}</td>
-                <td>{getOwner(n)}</td>
-                <td style={{ fontWeight: 600 }}>
-                  <input
+              <TableRow key={n.id} className="cursor-pointer">
+                <TableCell className="text-[10px]" onClick={() => selectNode(n)}>{n.name}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="font-[Tomorrow] text-[10px]" style={{ color: priorityColor(n.priority), borderColor: priorityColor(n.priority) + "40" }}>{n.priority}</Badge>
+                </TableCell>
+                <TableCell className="text-[10px]">{n.workstream}</TableCell>
+                <TableCell className="text-[10px]">{statusLabel(n.status)}</TableCell>
+                <TableCell className="text-[10px]">{getOwner(n)}</TableCell>
+                <TableCell>
+                  <Input
                     type="number"
-                    className="dp-input"
-                    style={{ width: 90, fontSize: 10, padding: "2px 6px", fontWeight: 600, textAlign: "right" }}
+                    className="w-[90px] text-right font-[Tomorrow] text-[10px] font-semibold"
                     value={n.budget ?? 0}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => handleBudgetChange(n.id, parseInt(e.target.value) || 0)}
                   />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-            <tr style={{ fontWeight: 700, borderTop: "2px solid #1A1A1A" }}>
-              <td>TOTAL</td><td /><td /><td /><td />
-              <td>{fmt$(budgetItems.reduce((s, n) => s + (n.budget || 0), 0))}</td>
-            </tr>
-          </tbody>
-        </table>
+          </TableBody>
+          <TableFooter>
+            <TableRow className="font-bold">
+              <TableCell className="text-[10px]">TOTAL</TableCell>
+              <TableCell />
+              <TableCell />
+              <TableCell />
+              <TableCell />
+              <TableCell className="text-[10px]">{fmt$(budgetItems.reduce((s, n) => s + (n.budget || 0), 0))}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
       </div>
     </div>
   );
