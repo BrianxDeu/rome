@@ -31,6 +31,14 @@ function isGoalNode(node: Node): boolean {
   return name.includes("goal") || name.includes("mission");
 }
 
+// Known workstream center positions matching reference layout:
+// HALO left, ORCREST upper-right, LAPD lower-right
+const WS_CENTERS: Record<string, { x: number; y: number }> = {
+  "Halo MVP": { x: -200, y: 0 },
+  "Orcrest":  { x: 350, y: -150 },
+  "LAPD":     { x: 300, y: 200 },
+};
+
 // Layout for nodes without x/y
 function computeLayout(
   nodes: Node[],
@@ -58,13 +66,16 @@ function computeLayout(
   let wsAngle = 0;
   const wsCount = workstreams.size;
 
-  for (const [, wsNodes] of workstreams) {
-    const angleRad = (wsAngle / wsCount) * 2 * Math.PI - Math.PI / 2;
-    const wsRadius = 450;
-    const wsCenter = {
-      x: Math.cos(angleRad) * wsRadius,
-      y: Math.sin(angleRad) * wsRadius,
-    };
+  for (const [wsName, wsNodes] of workstreams) {
+    const known = WS_CENTERS[wsName];
+    const wsCenter = known ?? (() => {
+      const angleRad = (wsAngle / wsCount) * 2 * Math.PI - Math.PI / 2;
+      const wsRadius = 450;
+      return {
+        x: Math.cos(angleRad) * wsRadius,
+        y: Math.sin(angleRad) * wsRadius,
+      };
+    })();
 
     const clusterParents = wsNodes.filter((n) => isClusterNode(n.id, childrenMap));
     const leafNodes = wsNodes.filter((n) => !isClusterNode(n.id, childrenMap) && !parentMap.has(n.id));
