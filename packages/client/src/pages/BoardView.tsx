@@ -159,7 +159,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
       setNodes(graph.nodes);
       setEdges(graph.edges);
-    } catch {}
+    } catch (err) { console.error("[BoardView]", err); }
 
     boardDrag.current = null;
   }
@@ -207,7 +207,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
         setNodes(graph.nodes);
         setEdges(graph.edges);
-      } catch {}
+      } catch (err) { console.error("[BoardView]", err); }
     } else {
       // Same-group reorder (existing logic)
       const wsKey = sectionKey.split("/")[0];
@@ -238,7 +238,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     const apiField = apiFieldMap[field] ?? field;
     try {
       await api(`/nodes/${id}`, { method: "PATCH", body: JSON.stringify({ [apiField]: value }) });
-    } catch {}
+    } catch (err) { console.error("[BoardView]", err); }
   }
 
   function handleFieldChange(nodeId: string, field: keyof Node, value: unknown) {
@@ -259,7 +259,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       await api(`/nodes/${nodeId}`, { method: "DELETE" });
       removeNode(nodeId);
       if (boardExpanded === nodeId) setBoardExpanded(null);
-    } catch {}
+    } catch (err) { console.error("[BoardView]", err); }
   }
 
   async function boardAddCluster(workstream: string) {
@@ -288,7 +288,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       setEdges(graph.edges);
       setBoardAddLabel("");
       setBoardAddGroup(null);
-    } catch {}
+    } catch (err) { console.error("[BoardView]", err); }
   }
 
   async function boardAddNode(workstream: string, clusterId?: string) {
@@ -316,7 +316,9 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       setBoardAddLabel("");
       setBoardAddGroup(null);
       setBoardExpanded(node.id);
-    } catch {}
+    } catch (err) {
+      console.error("[boardAddNode] failed:", err);
+    }
   }
 
   function renderCard(n: Node, sectionKey: string, clusterId?: string) {
@@ -441,7 +443,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     const label = isGroupAdd ? "Add node group" : "Add node";
     const placeholder = isGroupAdd ? "New node group name..." : "New node name...";
     return boardAddGroup === key ? (
-      <div className="board-add-row" style={{ borderStyle: "solid", borderColor: "#B81917" }}>
+      <div className="board-add-row" style={{ borderStyle: "solid", borderColor: "#B81917" }} onClick={(e) => e.stopPropagation()}>
         <span style={{ color: "#B81917", fontWeight: 600, fontSize: 14 }}>+</span>
         <input
           autoFocus
@@ -449,18 +451,24 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           value={boardAddLabel}
           onChange={(e) => setBoardAddLabel(e.target.value)}
           onKeyDown={(e) => {
+            e.stopPropagation();
             if (e.key === "Enter") {
+              e.preventDefault();
               if (isGroupAdd) boardAddCluster(workstream);
               else boardAddNode(workstream, clusterId);
             }
-            if (e.key === "Escape") { setBoardAddGroup(null); setBoardAddLabel(""); }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setBoardAddGroup(null);
+              setBoardAddLabel("");
+            }
           }}
         />
-        <Button size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => {
+        <button className="btn" type="button" onClick={() => {
           if (isGroupAdd) boardAddCluster(workstream);
           else boardAddNode(workstream, clusterId);
-        }}>ADD</Button>
-        <Button variant="outline" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</Button>
+        }}>ADD</button>
+        <button className="btn" type="button" onClick={() => { setBoardAddGroup(null); setBoardAddLabel(""); }}>ESC</button>
       </div>
     ) : (
       <div className="board-add-row" onClick={() => setBoardAddGroup(key)}>
