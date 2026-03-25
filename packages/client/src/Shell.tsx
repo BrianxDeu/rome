@@ -1,12 +1,11 @@
 import { useState, useCallback } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
-import { NodePanel } from "./components/NodePanel";
 import { AddNodeModal } from "./components/AddNodeModal";
 import { AddWorkstreamModal } from "./components/AddWorkstreamModal";
 import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
-import { GraphView } from "./pages/GraphView";
+// GraphView + NodePanel removed — Graph view disabled for rebuild
 import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
@@ -21,19 +20,16 @@ export function Shell() {
   const [activeView, setActiveView] = useState<ViewTab>("board");
   const [addNodeModal, setAddNodeModal] = useState<AddNodeModalState>({ open: false });
   const [addWorkstreamModal, setAddWorkstreamModal] = useState(false);
-  const selectedNode = useGraphStore((s) => s.selectedNode);
-  const nodes = useGraphStore((s) => s.nodes);
   const selectNode = useGraphStore((s) => s.selectNode);
   useGraph();
   useSync();
 
+  // handleNavigateToNode removed — Graph view disabled for rebuild
   const handleNavigateToNode = useCallback(
-    (nodeId: string) => {
-      const node = nodes.find((n) => n.id === nodeId) ?? null;
-      if (node) selectNode(node);
-      setActiveView("graph");
+    (_nodeId: string) => {
+      // no-op while graph is disabled
     },
-    [nodes, selectNode],
+    [],
   );
 
   const handleOpenAddNode = useCallback(
@@ -59,9 +55,11 @@ export function Shell() {
         ) : activeView === "budget" ? (
           <BudgetView />
         ) : (
-          <GraphView onNavigateToNode={handleNavigateToNode} />
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 12 }}>
+            Graph view is being rebuilt.
+          </div>
         )}
-        {selectedNode && activeView !== "board" && <NodePanel />}
+        {/* NodePanel disabled — was only used by Graph view */}
       </div>
 
       {addNodeModal.open && (

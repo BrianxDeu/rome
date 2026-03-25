@@ -10,7 +10,7 @@ interface TopBarProps {
   onAddWorkstream?: () => void;
 }
 
-const tabs: ViewTab[] = ["board", "graph", "gantt", "budget"];
+const tabs: ViewTab[] = ["board", "gantt", "budget"];
 
 export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
