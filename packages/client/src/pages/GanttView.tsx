@@ -60,6 +60,8 @@ export function GanttView() {
     return rows;
   }, [workstreams, leafNodes]);
 
+  const hasAnyBars = ganttRows.some((r) => r.type === "node" && r.node?.startDate && r.node?.endDate);
+
   // Time range
   const ganttStart = new Date("2026-03-01");
   const ganttEnd = new Date("2027-01-01");
@@ -186,6 +188,11 @@ export function GanttView() {
                 );
               })}
               <div className="gantt-today" style={{ left: todayX }} />
+              {!hasAnyBars && (
+                <div style={{ position: "absolute", top: 80, left: 0, right: 0, textAlign: "center", color: "#999", fontSize: 12, letterSpacing: 0.5, pointerEvents: "none" }}>
+                  Set start and end dates on nodes to see timeline bars here.
+                </div>
+              )}
             </div>
           </div>
         </div>
