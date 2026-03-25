@@ -45,7 +45,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const [boardOrder, setBoardOrder] = useState<Record<string, string[]>>({});
   const [boardAddGroup, setBoardAddGroup] = useState<string | null>(null);
   const [boardAddLabel, setBoardAddLabel] = useState("");
-  const boardDrag = useRef<{ id: string; section: string } | null>(null);
+  const boardDrag = useRef<{ id: string; section: string; clusterId?: string } | null>(null);
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
 
@@ -80,8 +80,8 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     return ordered;
   }
 
-  function onBoardDragStart(e: React.DragEvent, nodeId: string, sectionKey: string) {
-    boardDrag.current = { id: nodeId, section: sectionKey };
+  function onBoardDragStart(e: React.DragEvent, nodeId: string, sectionKey: string, clusterId?: string) {
+    boardDrag.current = { id: nodeId, section: sectionKey, clusterId };
     e.dataTransfer.effectAllowed = "move";
     (e.target as HTMLElement).classList.add("dragging");
   }
@@ -94,9 +94,9 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     boardDrag.current = null;
   }
 
-  function onBoardDragOver(e: React.DragEvent, nodeId: string, sectionKey: string) {
+  function onBoardDragOver(e: React.DragEvent, nodeId: string) {
     e.preventDefault();
-    if (!boardDrag.current || boardDrag.current.section !== sectionKey || boardDrag.current.id === nodeId) return;
+    if (!boardDrag.current || boardDrag.current.id === nodeId) return;
     e.dataTransfer.dropEffect = "move";
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const mid = rect.top + rect.height / 2;
@@ -108,31 +108,122 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
   }
 
-  function onBoardDrop(e: React.DragEvent, targetId: string, sectionKey: string) {
+  function onSectionDragOver(e: React.DragEvent) {
+    if (!boardDrag.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  async function onSectionDrop(e: React.DragEvent, sectionKey: string, clusterId?: string) {
+    e.preventDefault();
+    if (!boardDrag.current) return;
+    const dragId = boardDrag.current.id;
+    const sourceSection = boardDrag.current.section;
+    const sourceClusterId = boardDrag.current.clusterId;
+
+    if (sourceSection === sectionKey) return; // same section, ignore section-level drop
+
+    try {
+      // 1) Delete old parent_of edge
+      if (sourceClusterId) {
+        const oldEdge = edges.find(
+          (ed) => ed.type === "parent_of" && ed.sourceId === sourceClusterId && ed.targetId === dragId,
+        );
+        if (oldEdge) {
+          await api(`/edges/${oldEdge.id}`, { method: "DELETE" });
+        }
+      }
+      // 2) Create new parent_of edge if dropping into a cluster
+      if (clusterId) {
+        await api("/edges", {
+          method: "POST",
+          body: JSON.stringify({ source_id: clusterId, target_id: dragId, type: "parent_of" }),
+        });
+      }
+      // 3) Update workstream if different
+      const targetWs = sectionKey.split("/")[0];
+      const sourceWs = sourceSection.split("/")[0];
+      if (targetWs !== sourceWs) {
+        await api(`/nodes/${dragId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ workstream: targetWs }),
+        });
+      }
+      // 4) Refetch graph
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+    } catch {}
+
+    boardDrag.current = null;
+  }
+
+  async function onBoardDrop(e: React.DragEvent, targetId: string, sectionKey: string, targetClusterId?: string) {
     e.preventDefault();
     (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
-    if (!boardDrag.current || boardDrag.current.section !== sectionKey) return;
+    if (!boardDrag.current) return;
     const dragId = boardDrag.current.id;
+    const sourceSection = boardDrag.current.section;
+    const sourceClusterId = boardDrag.current.clusterId;
     if (dragId === targetId) return;
 
-    const wsKey = sectionKey.split("/")[0];
-    const sectionNodes = leafNodes.filter((n) => n.workstream === wsKey);
-    const filteredNodes = sectionKey.includes("/")
-      ? sectionNodes.filter((n) => parentMap.get(n.id) === sectionKey.split("/")[1])
-      : sectionNodes.filter((n) => !parentMap.has(n.id));
-    const ids = getBoardOrder(sectionKey, filteredNodes.map((n) => n.id));
+    const isCrossGroup = sourceSection !== sectionKey;
 
-    const fromIdx = ids.indexOf(dragId);
-    const toIdx = ids.indexOf(targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
+    if (isCrossGroup) {
+      // Cross-group move: update parent_of edges via API
+      try {
+        // 1) Delete old parent_of edge if any
+        if (sourceClusterId) {
+          const oldEdge = edges.find(
+            (ed) => ed.type === "parent_of" && ed.sourceId === sourceClusterId && ed.targetId === dragId,
+          );
+          if (oldEdge) {
+            await api(`/edges/${oldEdge.id}`, { method: "DELETE" });
+          }
+        }
+        // 2) Create new parent_of edge if dropping into a cluster (not ungrouped)
+        if (targetClusterId) {
+          await api("/edges", {
+            method: "POST",
+            body: JSON.stringify({ source_id: targetClusterId, target_id: dragId, type: "parent_of" }),
+          });
+        }
+        // 3) Update workstream if moving to a different workstream
+        const targetWs = sectionKey.split("/")[0];
+        const sourceWs = sourceSection.split("/")[0];
+        if (targetWs !== sourceWs) {
+          await api(`/nodes/${dragId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ workstream: targetWs }),
+          });
+        }
+        // 4) Refetch graph for consistency
+        const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
+      } catch {}
+    } else {
+      // Same-group reorder (existing logic)
+      const wsKey = sectionKey.split("/")[0];
+      const sectionNodes = leafNodes.filter((n) => n.workstream === wsKey);
+      const filteredNodes = sectionKey.includes("/")
+        ? sectionNodes.filter((n) => parentMap.get(n.id) === sectionKey.split("/")[1])
+        : sectionNodes.filter((n) => !parentMap.has(n.id));
+      const ids = getBoardOrder(sectionKey, filteredNodes.map((n) => n.id));
 
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const insertAfter = e.clientY >= rect.top + rect.height / 2;
-    const newIds = ids.filter((id) => id !== dragId);
-    const insertIdx = newIds.indexOf(targetId) + (insertAfter ? 1 : 0);
-    newIds.splice(insertIdx, 0, dragId);
+      const fromIdx = ids.indexOf(dragId);
+      const toIdx = ids.indexOf(targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
 
-    setBoardOrder((prev) => ({ ...prev, [sectionKey]: newIds }));
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const insertAfter = e.clientY >= rect.top + rect.height / 2;
+      const newIds = ids.filter((id) => id !== dragId);
+      const insertIdx = newIds.indexOf(targetId) + (insertAfter ? 1 : 0);
+      newIds.splice(insertIdx, 0, dragId);
+
+      setBoardOrder((prev) => ({ ...prev, [sectionKey]: newIds }));
+    }
+
     boardDrag.current = null;
   }
 
@@ -233,11 +324,11 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         key={n.id}
         className={`board-card ${isExp ? "expanded" : ""}`}
         draggable
-        onDragStart={(e) => onBoardDragStart(e, n.id, sectionKey)}
+        onDragStart={(e) => onBoardDragStart(e, n.id, sectionKey, clusterId)}
         onDragEnd={onBoardDragEnd}
-        onDragOver={(e) => onBoardDragOver(e, n.id, sectionKey)}
+        onDragOver={(e) => onBoardDragOver(e, n.id)}
         onDragLeave={onBoardDragLeave}
-        onDrop={(e) => onBoardDrop(e, n.id, sectionKey)}
+        onDrop={(e) => onBoardDrop(e, n.id, sectionKey, clusterId)}
         onClick={() => setBoardExpanded(isExp ? null : n.id)}
       >
         <div className="board-card-drag" onMouseDown={(e) => e.stopPropagation()}>&#8942;&#8942;</div>
@@ -417,7 +508,11 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       <div className="board-subgroup-count">{children.length}</div>
                     </div>
                     {!isSubCol && (
-                      <div className="board-subgroup-cards">
+                      <div
+                        className="board-subgroup-cards"
+                        onDragOver={onSectionDragOver}
+                        onDrop={(e) => onSectionDrop(e, subKey, cluster.id)}
+                      >
                         {orderedChildren.map((n) => renderCard(n, subKey, cluster.id))}
                         {renderAddRow(ws, cluster.id)}
                       </div>
@@ -433,7 +528,11 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                     <div className="board-subgroup-count">{ungrouped.length}</div>
                   </div>
                   {!boardCollapsed.has(ungroupedKey) && (
-                    <div className="board-subgroup-cards">
+                    <div
+                      className="board-subgroup-cards"
+                      onDragOver={onSectionDragOver}
+                      onDrop={(e) => onSectionDrop(e, ungroupedKey)}
+                    >
                       {getBoardOrder(ungroupedKey, ungrouped.map((n) => n.id)).map((id) => {
                         const n = ungrouped.find((nd) => nd.id === id);
                         return n ? renderCard(n, ungroupedKey) : null;
@@ -442,12 +541,17 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   )}
                 </div>
               )}
-              {ungrouped.length > 0 && clusters.length === 0 &&
-                getBoardOrder(ungroupedKey, ungrouped.map((n) => n.id)).map((id) => {
-                  const n = ungrouped.find((nd) => nd.id === id);
-                  return n ? renderCard(n, ungroupedKey) : null;
-                })
-              }
+              {ungrouped.length > 0 && clusters.length === 0 && (
+                <div
+                  onDragOver={onSectionDragOver}
+                  onDrop={(e) => onSectionDrop(e, ungroupedKey)}
+                >
+                  {getBoardOrder(ungroupedKey, ungrouped.map((n) => n.id)).map((id) => {
+                    const n = ungrouped.find((nd) => nd.id === id);
+                    return n ? renderCard(n, ungroupedKey) : null;
+                  })}
+                </div>
+              )}
               {renderAddRow(ws, undefined, true)}
             </div>
           </div>
