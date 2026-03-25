@@ -142,6 +142,8 @@ export function GanttView() {
       </div>
       <div className="gantt-body">
         <div className="gantt-sidebar">
+          {/* Spacer to align with canvas header */}
+          <div style={{ height: 28, borderBottom: "1px solid #E7E7E7" }} />
           {ganttRows.map((row, i) => {
             if (row.type === "group") {
               return (
