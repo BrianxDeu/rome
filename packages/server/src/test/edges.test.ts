@@ -105,8 +105,8 @@ describe("POST /api/edges", () => {
   });
 });
 
-describe("Edge immutability", () => {
-  it("has no PATCH endpoint for edges (type is immutable per spec)", async () => {
+describe("PATCH /api/edges/:id", () => {
+  it("updates edge type", async () => {
     const a = await createNode(ctx.app, token, "A");
     const b = await createNode(ctx.app, token, "B");
 
@@ -114,9 +114,10 @@ describe("Edge immutability", () => {
       .send({ source_id: a.id, target_id: b.id, type: "blocks" });
 
     const res = await request(ctx.app).patch(`/api/edges/${create.body.id}`).set("Authorization", `Bearer ${token}`)
-      .send({ type: "parent_of" });
+      .send({ type: "depends_on" });
 
-    expect([404, 405]).toContain(res.status);
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("depends_on");
   });
 });
 

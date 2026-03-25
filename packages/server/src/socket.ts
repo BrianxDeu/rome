@@ -9,6 +9,7 @@ export type RomeEvent =
   | { type: "node:updated"; payload: Record<string, unknown> }
   | { type: "node:deleted"; payload: { id: string } }
   | { type: "edge:created"; payload: Record<string, unknown> }
+  | { type: "edge:updated"; payload: Record<string, unknown> }
   | { type: "edge:deleted"; payload: { id: string } };
 
 let io: SocketServer | null = null;

@@ -122,6 +122,39 @@ export function edgeRoutes(db: Db): Router {
     res.status(201).json(toEdgeJson(edge));
   });
 
+  const patchSchema = z.object({
+    type: z.enum(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared", "parent_of"]).optional(),
+  });
+
+  router.patch("/:id", (req, res) => {
+    const existing = db.select().from(edges).where(eq(edges.id, req.params.id!)).get();
+    if (!existing) {
+      res.status(404).json({ error: "Edge not found", code: "NOT_FOUND" });
+      return;
+    }
+
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid input", code: "VALIDATION_ERROR" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = { updatedAt: now };
+    if (parsed.data.type !== undefined) {
+      updates.type = parsed.data.type;
+    }
+
+    db.update(edges)
+      .set(updates)
+      .where(eq(edges.id, req.params.id!))
+      .run();
+
+    const updated = db.select().from(edges).where(eq(edges.id, req.params.id!)).get()!;
+    broadcast({ type: "edge:updated", payload: updated as unknown as Record<string, unknown> });
+    res.json(toEdgeJson(updated));
+  });
+
   router.delete("/:id", (req, res) => {
     const existing = db.select().from(edges).where(eq(edges.id, req.params.id!)).get();
     if (!existing) {

@@ -104,8 +104,8 @@ export function NodePanel() {
         body: JSON.stringify(body),
       });
       setDirty(false);
-    } catch {
-      // handled by api()
+    } catch (err) {
+      console.error("Failed to save node:", err);
     }
   }
 
@@ -114,7 +114,9 @@ export function NodePanel() {
       await api(`/nodes/${selectedNode!.id}`, { method: "DELETE" });
       removeNode(selectedNode!.id);
       selectNode(null);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to delete node:", err);
+    }
   }
 
   async function handleAddEdge(targetId: string, direction: "incoming" | "outgoing") {
@@ -126,14 +128,18 @@ export function NodePanel() {
         body: JSON.stringify({ source_id: sourceId, target_id: tgtId, type: "blocker" }),
       });
       addEdge(edge);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to add edge:", err);
+    }
   }
 
   async function handleRemoveEdge(edgeId: string) {
     try {
       await api(`/edges/${edgeId}`, { method: "DELETE" });
       removeEdge(edgeId);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to remove edge:", err);
+    }
   }
 
   async function handleEdgeTypeChange(edgeId: string, newType: string) {
@@ -148,7 +154,9 @@ export function NodePanel() {
         removeEdge(edgeId);
         addEdge({ ...edge, type: newType });
       }
-    } catch {}
+    } catch (err) {
+      console.error("Failed to change edge type:", err);
+    }
   }
 
   function nodeName(id: string): string {
