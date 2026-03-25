@@ -6,6 +6,7 @@ import {
   isClusterNode,
 } from "../constants";
 import type { Node, Edge } from "@rome/shared";
+import { Button } from "../components/ui/button";
 
 type TimeScale = "week" | "month" | "quarter" | "year";
 
@@ -132,9 +133,9 @@ export function GanttView() {
     <div className="gantt-wrap">
       <div className="gantt-controls">
         {(["week", "month", "quarter", "year"] as TimeScale[]).map((s) => (
-          <button key={s} className={`btn ${scale === s ? "primary" : ""}`} onClick={() => setScale(s)}>
+          <Button key={s} variant={scale === s ? "default" : "outline"} size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={() => setScale(s)}>
             {s.toUpperCase()}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="gantt-body">
