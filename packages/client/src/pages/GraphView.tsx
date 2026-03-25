@@ -24,7 +24,6 @@ function isGoalNode(node: Node): boolean {
   return name.includes("goal") || name.includes("mission");
 }
 
-// Tight, organic layout — clusters radiate from goal at close distance
 function computeLayout(
   nodes: Node[],
   edges: Edge[],
@@ -38,7 +37,6 @@ function computeLayout(
     positions.set(goalNode.id, { x: 0, y: 0 });
   }
 
-  // Group non-goal nodes by workstream
   const workstreams = new Map<string, Node[]>();
   for (const n of nodes) {
     if (goalNode && n.id === goalNode.id) continue;
@@ -48,55 +46,57 @@ function computeLayout(
     workstreams.set(ws, group);
   }
 
-  const wsCount = workstreams.size;
-  let wsIndex = 0;
+  const wsEntries = [...workstreams.entries()];
+  const wsCount = wsEntries.length;
+  const baseRadius = Math.max(250, wsCount * 80);
 
-  for (const [, wsNodes] of workstreams) {
-    // Radiate workstreams evenly around center at a tight radius
-    const angleRad = (wsIndex / wsCount) * 2 * Math.PI - Math.PI / 2;
-    const wsRadius = 160;
+  wsEntries.forEach(([ws, wsNodes], wsIndex) => {
+    const angle = (wsIndex / wsCount) * Math.PI * 2 - Math.PI / 2;
     const wsCenter = {
-      x: Math.cos(angleRad) * wsRadius,
-      y: Math.sin(angleRad) * wsRadius,
+      x: Math.cos(angle) * baseRadius,
+      y: Math.sin(angle) * baseRadius,
     };
 
-    const clusterParents = wsNodes.filter((n) => isClusterNode(n.id, childrenMap));
-    const leafNodes = wsNodes.filter((n) => !isClusterNode(n.id, childrenMap) && !parentMap.has(n.id));
+    const clusterParents = wsNodes.filter((n) => childrenMap.has(n.id) && (childrenMap.get(n.id)?.length ?? 0) > 0);
+    const ungroupedLeaves = wsNodes.filter((n) => !childrenMap.has(n.id) || (childrenMap.get(n.id)?.length ?? 0) === 0)
+      .filter((n) => !parentMap.has(n.id));
 
-    let yOff = 0;
-    for (const cp of clusterParents) {
-      const children = (childrenMap.get(cp.id) ?? [])
-        .map((cid) => nodes.find((n) => n.id === cid))
-        .filter(Boolean) as Node[];
-      positions.set(cp.id, { x: wsCenter.x, y: wsCenter.y + yOff });
+    const clusterSpacingX = 200;
+    const clusterSpacingY = 160;
+    const cols = Math.max(2, Math.ceil(Math.sqrt(clusterParents.length)));
 
-      // Cluster children in a tight arc around parent
-      const childRadius = 50;
-      const arcSpan = Math.min(Math.PI * 0.8, children.length * 0.4);
-      const arcStart = angleRad - arcSpan / 2;
-      for (let i = 0; i < children.length; i++) {
-        const a = children.length === 1
-          ? angleRad
-          : arcStart + (i / (children.length - 1)) * arcSpan;
-        positions.set(children[i].id, {
-          x: wsCenter.x + yOff * 0 + Math.cos(a) * childRadius,
-          y: wsCenter.y + yOff + Math.sin(a) * childRadius,
+    clusterParents.forEach((cluster, ci) => {
+      const row = Math.floor(ci / cols);
+      const col = ci % cols;
+      const cx = wsCenter.x + (col - (cols - 1) / 2) * clusterSpacingX;
+      const cy = wsCenter.y + (row - Math.floor(clusterParents.length / cols) / 2) * clusterSpacingY;
+      positions.set(cluster.id, { x: cx, y: cy });
+
+      const children = childrenMap.get(cluster.id) ?? [];
+      const childRadius = Math.max(60, children.length * 18);
+      const arcSpan = Math.min(Math.PI * 1.2, children.length * 0.5);
+      const arcStart = angle - arcSpan / 2;
+
+      children.forEach((childId, chi) => {
+        const childAngle = children.length === 1
+          ? angle
+          : arcStart + (chi / (children.length - 1)) * arcSpan;
+        positions.set(childId, {
+          x: cx + Math.cos(childAngle) * childRadius,
+          y: cy + Math.sin(childAngle) * childRadius,
         });
-      }
-      yOff += childRadius * 2 + 40;
-    }
-
-    // Leaf nodes in a compact column
-    for (let i = 0; i < leafNodes.length; i++) {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      positions.set(leafNodes[i].id, {
-        x: wsCenter.x + (col - 0.5) * 70,
-        y: wsCenter.y + yOff + row * 50,
       });
-    }
-    wsIndex++;
-  }
+    });
+
+    const leafRadius = clusterParents.length > 0 ? baseRadius * 0.3 : 60;
+    ungroupedLeaves.forEach((leaf, li) => {
+      const leafAngle = (li / Math.max(ungroupedLeaves.length, 1)) * Math.PI * 2;
+      positions.set(leaf.id, {
+        x: wsCenter.x + Math.cos(leafAngle) * leafRadius,
+        y: wsCenter.y + Math.sin(leafAngle) * leafRadius,
+      });
+    });
+  });
 
   return positions;
 }
@@ -112,7 +112,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
   const collapseAll = useGraphStore((s) => s.collapseAll);
 
   const svgRef = useRef<SVGSVGElement>(null);
-  const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, z: 1.4 });
+  const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, z: 0.9 });
   const vpRef = useRef(vp);
   vpRef.current = vp;
   const nodesRef = useRef(storeNodes);
@@ -164,7 +164,7 @@ export function GraphView({ onNavigateToNode }: GraphViewProps) {
     if (!svg || storeNodes.length === 0) return;
     hasInitViewport.current = true;
     const rect = svg.getBoundingClientRect();
-    const z = 1.4;
+    const z = 0.9;
     // Center the viewport on (0,0) which is where goal node sits
     setVp({
       x: rect.width / 2,
