@@ -37,6 +37,18 @@ export function GraphView() {
     [storeEdges],
   );
 
+  // Workstream header: name matches workstream, no parent in the hierarchy
+  const isWsHeader = useCallback(
+    (n: Node) => !!(n.workstream && n.name === n.workstream && !parentMap.has(n.id) && !isGoalNode(n)),
+    [parentMap],
+  );
+
+  // "Structural" nodes: cluster parents OR workstream headers (rendered as big nodes, not task dots)
+  const isStructuralNode = useCallback(
+    (n: Node) => isClusterNode(n.id, childrenMap) || isWsHeader(n),
+    [childrenMap, isWsHeader],
+  );
+
   const { positions: posMap, onDragMove } = useStaticLayout(storeNodes, storeEdges);
 
   const selId = selectedNode?.id ?? null;
@@ -387,13 +399,13 @@ export function GraphView() {
             );
           })}
 
-          {/* Goal → cluster connector lines */}
+          {/* Goal → structural node connector lines */}
           {(() => {
             if (!goalNode) return null;
             const goalPos = posMap.get(goalNode.id);
             if (!goalPos) return null;
             return storeNodes
-              .filter((n) => isClusterNode(n.id, childrenMap))
+              .filter((n) => isStructuralNode(n) && !isGoalNode(n))
               .map((cluster) => {
                 const cPos = posMap.get(cluster.id);
                 if (!cPos) return null;
@@ -442,9 +454,9 @@ export function GraphView() {
             );
           })}
 
-          {/* Cluster parent nodes */}
+          {/* Structural nodes (cluster parents + workstream headers) */}
           {storeNodes
-            .filter((n) => isClusterNode(n.id, childrenMap) && !isGoalNode(n))
+            .filter((n) => isStructuralNode(n) && !isGoalNode(n))
             .map((cluster) => {
               const pos = posMap.get(cluster.id);
               if (!pos) return null;
@@ -453,7 +465,10 @@ export function GraphView() {
               const isHovered = hoveredNode === cluster.id;
               const isExpanded = expandedClusters.has(cluster.id);
               const childCount = (childrenMap.get(cluster.id) ?? []).length;
-              const r = isExpanded ? 10 : 14; // collapsed clusters are bigger to indicate they contain children
+              const isWs = isWsHeader(cluster);
+              // 3-tier hierarchy: workstream (biggest) > node group > task node
+              const baseR = isWs ? 18 : 12;
+              const r = isExpanded ? baseR - 2 : baseR;
               return (
                 <g
                   key={`cl-${cluster.id}`}
@@ -520,7 +535,7 @@ export function GraphView() {
 
           {/* Task nodes (only visible if their cluster is expanded or they have no cluster) */}
           {storeNodes
-            .filter((n) => !isClusterNode(n.id, childrenMap) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
+            .filter((n) => !isStructuralNode(n) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
             .map((node) => {
               const pos = posMap.get(node.id);
               if (!pos) return null;

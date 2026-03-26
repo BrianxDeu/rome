@@ -63,9 +63,15 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     return Array.from(ws).sort();
   }, [nodes]);
 
+  // A workstream header is a node whose name matches its workstream and has no parent
+  const isWsHeader = useCallback(
+    (n: Node) => n.workstream && n.name === n.workstream && !parentMap.has(n.id),
+    [parentMap],
+  );
+
   const leafNodes = useMemo(
-    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap)),
-    [nodes, childrenMap],
+    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap) && !isWsHeader(n)),
+    [nodes, childrenMap, isWsHeader],
   );
 
   function toggleBoardSub(subId: string) {
@@ -75,6 +81,71 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       else n.add(subId);
       return n;
     });
+  }
+
+  // --- Inline rename via double-click + contentEditable ---
+  async function renameNode(nodeId: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    updateNode(nodeId, { name: trimmed });
+    try {
+      await api(`/nodes/${nodeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmed }),
+      });
+    } catch (err) {
+      console.error("Failed to rename node:", err);
+    }
+  }
+
+  async function renameWorkstream(oldName: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    // Update workstream field on ALL nodes with this workstream
+    const affected = nodes.filter((n) => n.workstream === oldName);
+    for (const n of affected) {
+      updateNode(n.id, { workstream: trimmed });
+    }
+    // Persist to DB
+    try {
+      for (const n of affected) {
+        await api(`/nodes/${n.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ workstream: trimmed }),
+        });
+      }
+      // Refetch for consistency
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+    } catch (err) {
+      console.error("Failed to rename workstream:", err);
+    }
+  }
+
+  function handleEditableBlur(
+    e: React.FocusEvent<HTMLDivElement>,
+    onSave: (newText: string) => void,
+    originalText: string,
+  ) {
+    const newText = (e.currentTarget.textContent ?? "").trim();
+    if (newText && newText !== originalText) {
+      onSave(newText);
+    } else {
+      e.currentTarget.textContent = originalText;
+    }
+  }
+
+  function handleEditableKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      // Restore original — blur will handle it since text matches original
+      e.currentTarget.blur();
+    }
   }
 
   function getBoardOrder(sectionKey: string, nodeIds: string[]): string[] {
@@ -265,8 +336,10 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   async function boardAddCluster(workstream: string) {
     if (!boardAddLabel.trim()) return;
     try {
-      // Find the workstream header node to use as parent
-      const wsHeader = nodes.find((n) => isClusterNode(n.id, childrenMap) && n.workstream === workstream && !parentMap.has(n.id));
+      // Find the workstream header node (name matches workstream, no parent)
+      const wsHeader = nodes.find((n) => n.workstream === workstream && n.name === workstream && !parentMap.has(n.id));
+
+      // Create the new node group node
       const node = await api<Node>("/nodes", {
         method: "POST",
         body: JSON.stringify({
@@ -276,12 +349,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           status: "not_started",
         }),
       });
+
+      // Link it under the workstream header as a child (makes it a cluster parent in the hierarchy)
       if (wsHeader) {
+        // parent_of edge: workstream owns this node group
         await api<Edge>("/edges", {
           method: "POST",
           body: JSON.stringify({ source_id: wsHeader.id, target_id: node.id, type: "parent_of" }),
         });
+        // sequence edge: this node group feeds into its workstream
+        await api<Edge>("/edges", {
+          method: "POST",
+          body: JSON.stringify({ source_id: node.id, target_id: wsHeader.id, type: "sequence" }),
+        });
       }
+
       // Refetch full graph for consistency
       const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
       setNodes(graph.nodes);
@@ -304,12 +386,17 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         }),
       });
       if (clusterId) {
+        // parent_of edge: cluster owns this node
         await api<Edge>("/edges", {
           method: "POST",
           body: JSON.stringify({ source_id: clusterId, target_id: node.id, type: "parent_of" }),
         });
+        // sequence edge: this node feeds into its node group
+        await api<Edge>("/edges", {
+          method: "POST",
+          body: JSON.stringify({ source_id: node.id, target_id: clusterId, type: "sequence" }),
+        });
       }
-      // Refetch full graph so edges + nodes are consistent for buildClusterMaps
       const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
       setNodes(graph.nodes);
       setEdges(graph.edges);
@@ -343,7 +430,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         <div className="board-card-accent" style={{ background: pColor }} />
         <CardContent className="board-card-main flex-1 p-[10px_14px]">
           <div className="board-card-top">
-            <div className="board-card-title">{n.name}</div>
+            <div
+              className="board-card-title"
+              style={isExp ? { cursor: "text" } : undefined}
+              contentEditable={isExp}
+              suppressContentEditableWarning
+              spellCheck={false}
+              onClick={isExp ? (e) => e.stopPropagation() : undefined}
+              onBlur={isExp ? (e) => handleEditableBlur(e, (newName) => renameNode(n.id, newName), n.name) : undefined}
+              onKeyDown={isExp ? handleEditableKeyDown : undefined}
+            >{n.name}</div>
             <div className="board-card-meta">
               <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{n.priority}</Badge>
               <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>{statusLabel(n.status)}</Badge>
@@ -563,11 +659,20 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       {workstreams.map((ws) => {
         const color = wsColor(ws, workstreams);
         const allGroupNodes = leafNodes.filter((n) => n.workstream === ws);
-        // Find clusters in this workstream
+        // Find clusters in this workstream:
+        // 1. Parents of leaf nodes (existing pattern)
+        // 2. Children of the workstream header (new node groups that may have no children yet)
         const clusterIds = new Set<string>();
         for (const n of allGroupNodes) {
           const parent = parentMap.get(n.id);
           if (parent) clusterIds.add(parent);
+        }
+        // Also find the workstream header and include its direct children as clusters
+        const wsHeader = nodes.find((n) => n.workstream === ws && n.name === ws && !parentMap.has(n.id));
+        if (wsHeader) {
+          for (const childId of childrenMap.get(wsHeader.id) ?? []) {
+            clusterIds.add(childId);
+          }
         }
         const clusters = Array.from(clusterIds)
           .map((id) => nodes.find((n) => n.id === id))
@@ -579,13 +684,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           <div key={ws} className="board-group">
             <div className="board-group-header">
               <div style={{ width: 12, height: 12, borderRadius: 2, background: color, flexShrink: 0 }} />
-              <div className="board-group-label" style={{ color }}>{ws}</div>
+              <div
+                className="board-group-label"
+                style={{ color, cursor: "text" }}
+                contentEditable
+                suppressContentEditableWarning
+                spellCheck={false}
+                onBlur={(e) => handleEditableBlur(e, (newName) => renameWorkstream(ws, newName), ws)}
+                onKeyDown={handleEditableKeyDown}
+                onDoubleClick={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).focus(); }}
+              >{ws}</div>
               <div className="board-group-count">{allGroupNodes.length} items</div>
             </div>
             <div className="board-cards">
               {clusters.map((cluster) => {
                 const children = allGroupNodes.filter((n) => parentMap.get(n.id) === cluster.id);
-                if (!children.length) return null;
                 const subKey = ws + "/" + cluster.id;
                 const isSubCol = boardCollapsed.has(subKey);
                 const orderedIds = getBoardOrder(subKey, children.map((n) => n.id));
@@ -595,7 +708,16 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   <div key={cluster.id} className="board-subgroup">
                     <div className="board-subgroup-header" onClick={() => toggleBoardSub(subKey)} style={{ borderLeftColor: clColor, borderLeftWidth: 3 }}>
                       <div className="board-subgroup-toggle">{isSubCol ? "\u25B6" : "\u25BC"}</div>
-                      <div className="board-subgroup-label" style={{ color: clColor }}>{cluster.name}</div>
+                      <div
+                        className="board-subgroup-label"
+                        style={{ color: clColor, cursor: isSubCol ? undefined : "text" }}
+                        contentEditable={!isSubCol}
+                        suppressContentEditableWarning
+                        spellCheck={false}
+                        onClick={!isSubCol ? (e) => e.stopPropagation() : undefined}
+                        onBlur={!isSubCol ? (e) => handleEditableBlur(e, (newName) => renameNode(cluster.id, newName), cluster.name) : undefined}
+                        onKeyDown={!isSubCol ? handleEditableKeyDown : undefined}
+                      >{cluster.name}</div>
                       <div className="board-subgroup-count">{children.length}</div>
                     </div>
                     {!isSubCol && (
