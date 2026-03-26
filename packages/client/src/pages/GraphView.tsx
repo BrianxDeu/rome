@@ -175,6 +175,8 @@ export function GraphView() {
     startMY: number;
     startNX: number;
     startNY: number;
+    lastX: number;
+    lastY: number;
     moved: boolean;
   } | null>(null);
 
@@ -189,6 +191,8 @@ export function GraphView() {
       startMY: e.clientY,
       startNX: pos.x,
       startNY: pos.y,
+      lastX: pos.x,
+      lastY: pos.y,
       moved: false,
     };
 
@@ -202,6 +206,8 @@ export function GraphView() {
         const v = vpRef.current;
         const newX = ds.startNX + dx / v.z;
         const newY = ds.startNY + dy / v.z;
+        ds.lastX = newX;
+        ds.lastY = newY;
         onDragMove(ds.id, newX, newY);
         updateNode(ds.id, { x: newX, y: newY });
       }
@@ -221,11 +227,11 @@ export function GraphView() {
         selectNode(node);
       }
       if (ds?.moved) {
-        const pos = posMap.get(ds.id);
-        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        const { lastX, lastY } = ds;
+        if (Number.isFinite(lastX) && Number.isFinite(lastY)) {
           api(`/nodes/${ds.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ x: Math.round(pos.x * 10) / 10, y: Math.round(pos.y * 10) / 10, position_pinned: true }),
+            body: JSON.stringify({ x: Math.round(lastX * 10) / 10, y: Math.round(lastY * 10) / 10, position_pinned: true }),
           }).catch((err) => console.error("Failed to save position:", err));
         }
       }
