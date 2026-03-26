@@ -28,17 +28,33 @@ export function createApp(db: Db) {
   app.use("/api/budget", authMiddleware, budgetRoutes(db));
 
   // --- MCP OAuth 2.0 endpoints (for Claude Co-Work custom connectors) ---
-  // Minimal OAuth flow: auto-approve authorization, validate client_secret as the token
+  // Follows MCP spec: RFC9728 Protected Resource Metadata → OAuth Authorization Server Metadata
 
-  // OAuth discovery metadata
+  // Helper: get base URL respecting Railway's TLS proxy
+  function baseUrl(req: express.Request): string {
+    const proto = req.get("x-forwarded-proto") || req.protocol;
+    return `${proto}://${req.get("host")}`;
+  }
+
+  // Step 1: Protected Resource Metadata (RFC9728)
+  // Claude discovers this first, pointed to by WWW-Authenticate header on 401
+  app.get("/.well-known/oauth-protected-resource", (_req, res) => {
+    const base = baseUrl(_req);
+    res.json({
+      resource: `${base}/mcp`,
+      authorization_servers: [base],
+      scopes_supported: ["mcp:tools"],
+    });
+  });
+
+  // Step 2: OAuth Authorization Server Metadata
   app.get("/.well-known/oauth-authorization-server", (_req, res) => {
-    // Railway terminates TLS at the proxy — always use https in production
-    const proto = _req.get("x-forwarded-proto") || _req.protocol;
-    const base = `${proto}://${_req.get("host")}`;
+    const base = baseUrl(_req);
     res.json({
       issuer: base,
       authorization_endpoint: `${base}/oauth/authorize`,
       token_endpoint: `${base}/oauth/token`,
+      registration_endpoint: `${base}/oauth/register`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256"],
@@ -68,6 +84,25 @@ export function createApp(db: Db) {
     url.searchParams.set("code", code);
     if (state) url.searchParams.set("state", state as string);
     res.redirect(url.toString());
+  });
+
+  // Dynamic Client Registration (RFC7591) — Claude registers itself as a client
+  app.post("/oauth/register", (req, res) => {
+    const { client_name, redirect_uris } = req.body;
+    const clientId = `rome-client-${crypto.randomUUID().slice(0, 8)}`;
+    // Store registered client (in-memory for simplicity)
+    const clientStore: Map<string, any> = (app as any)._oauthClients ?? new Map();
+    clientStore.set(clientId, { client_name, redirect_uris });
+    (app as any)._oauthClients = clientStore;
+
+    res.status(201).json({
+      client_id: clientId,
+      client_name: client_name || "Claude",
+      redirect_uris: redirect_uris || [],
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    });
   });
 
   // Token endpoint — exchanges code for access token

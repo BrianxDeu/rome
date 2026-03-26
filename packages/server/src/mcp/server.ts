@@ -367,6 +367,13 @@ export function createMcpHandler(db: Db): RequestHandler {
 
     const authHeader = req.headers.authorization;
     if (!authHeader || authHeader !== `Bearer ${authToken}`) {
+      // MCP spec: 401 must include WWW-Authenticate with resource_metadata pointing to PRM
+      const proto = req.get("x-forwarded-proto") || req.protocol;
+      const base = `${proto}://${req.get("host")}`;
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+      );
       res.status(401).json({ error: "Invalid or missing bearer token" });
       return;
     }
