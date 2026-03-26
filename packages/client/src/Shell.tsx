@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
 import { AddNodeModal } from "./components/AddNodeModal";
+import { AddNodeGroupModal } from "./components/AddNodeGroupModal";
 import { AddWorkstreamModal } from "./components/AddWorkstreamModal";
 import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
@@ -20,6 +21,7 @@ interface AddNodeModalState {
 export function Shell() {
   const [activeView, setActiveView] = useState<ViewTab>("board");
   const [addNodeModal, setAddNodeModal] = useState<AddNodeModalState>({ open: false });
+  const [addNodeGroupModal, setAddNodeGroupModal] = useState(false);
   const [addWorkstreamModal, setAddWorkstreamModal] = useState(false);
   const selectNode = useGraphStore((s) => s.selectNode);
   useGraph();
@@ -50,6 +52,7 @@ export function Shell() {
         activeView={activeView}
         onViewChange={(v) => { setActiveView(v); selectNode(null); }}
         onAddNode={() => handleOpenAddNode()}
+        onAddNodeGroup={() => setAddNodeGroupModal(true)}
         onAddWorkstream={() => setAddWorkstreamModal(true)}
       />
       <div className="main">
@@ -71,6 +74,9 @@ export function Shell() {
           defaultClusterId={addNodeModal.defaultClusterId}
           onClose={() => setAddNodeModal({ open: false })}
         />
+      )}
+      {addNodeGroupModal && (
+        <AddNodeGroupModal onClose={() => setAddNodeGroupModal(false)} />
       )}
       {addWorkstreamModal && (
         <AddWorkstreamModal onClose={() => setAddWorkstreamModal(false)} />

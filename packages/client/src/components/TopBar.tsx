@@ -7,12 +7,13 @@ interface TopBarProps {
   activeView: ViewTab;
   onViewChange: (view: ViewTab) => void;
   onAddNode?: () => void;
+  onAddNodeGroup?: () => void;
   onAddWorkstream?: () => void;
 }
 
 const tabs: ViewTab[] = ["board", "graph", "gantt", "budget"];
 
-export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }: TopBarProps) {
+export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, onAddWorkstream }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [shareOpen, setShareOpen] = useState(false);
@@ -60,6 +61,7 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddWorkstream }:
       </div>
       <div className="top-actions">
         {onAddNode && <button className="btn" onClick={onAddNode}>+ NODE</button>}
+        {onAddNodeGroup && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
         {onAddWorkstream && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
         <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
         {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}

@@ -763,6 +763,30 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                         onKeyDown={!isSubCol ? handleEditableKeyDown : undefined}
                       >{cluster.name}</div>
                       <div className="board-subgroup-count">{children.length}</div>
+                      <button
+                        className="btn"
+                        style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
+                        title="Delete node group"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm(`Delete node group "${cluster.name}" and all its tasks?`)) return;
+                          try {
+                            // Delete all children first
+                            for (const child of children) {
+                              await api(`/nodes/${child.id}`, { method: "DELETE" });
+                              removeNode(child.id);
+                            }
+                            // Then delete the cluster node itself
+                            await api(`/nodes/${cluster.id}`, { method: "DELETE" });
+                            removeNode(cluster.id);
+                            const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+                            setNodes(graph.nodes);
+                            setEdges(graph.edges);
+                          } catch (err) { console.error("Delete node group failed:", err); }
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                     {!isSubCol && (
                       <div
