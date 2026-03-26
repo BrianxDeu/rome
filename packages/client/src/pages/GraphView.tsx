@@ -30,6 +30,7 @@ export function GraphView() {
   vpRef.current = vp;
   const hasInitViewport = useRef(false);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
 
   const { parentMap, childrenMap } = useMemo(
     () => buildClusterMaps(storeEdges),
@@ -40,6 +41,27 @@ export function GraphView() {
 
   const selId = selectedNode?.id ?? null;
 
+  // Which child nodes are hidden (their cluster is collapsed)?
+  const hiddenNodeIds = useMemo(() => {
+    const hidden = new Set<string>();
+    for (const [clusterId, children] of childrenMap.entries()) {
+      if (!expandedClusters.has(clusterId)) {
+        for (const childId of children) hidden.add(childId);
+      }
+    }
+    return hidden;
+  }, [childrenMap, expandedClusters]);
+
+  // Toggle cluster expand/collapse
+  function toggleCluster(clusterId: string) {
+    setExpandedClusters((prev) => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) next.delete(clusterId);
+      else next.add(clusterId);
+      return next;
+    });
+  }
+
   // Fit-to-viewport
   const fitToViewport = useCallback(() => {
     const svg = svgRef.current;
@@ -47,13 +69,15 @@ export function GraphView() {
     const rect = svg.getBoundingClientRect();
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const pos of posMap.values()) {
+    for (const [id, pos] of posMap.entries()) {
+      if (hiddenNodeIds.has(id)) continue;
       minX = Math.min(minX, pos.x);
       maxX = Math.max(maxX, pos.x);
       minY = Math.min(minY, pos.y);
       maxY = Math.max(maxY, pos.y);
     }
 
+    if (minX === Infinity) return;
     const padding = 60;
     const graphW = maxX - minX + padding * 2;
     const graphH = maxY - minY + padding * 2;
@@ -66,7 +90,7 @@ export function GraphView() {
       y: rect.height / 2 - cy * z,
       z,
     });
-  }, [posMap]);
+  }, [posMap, hiddenNodeIds]);
 
   // Initial fit-to-viewport
   useEffect(() => {
@@ -75,20 +99,25 @@ export function GraphView() {
     fitToViewport();
   }, [posMap, fitToViewport]);
 
-  // Dependency edges (skip parent_of)
+  // Dependency edges — reroute hidden children to their cluster parent
   const graphEdges = useMemo(() => {
     const seen = new Set<string>();
     const result: Array<{ edgeId: string; type: string; fromId: string; toId: string }> = [];
     for (const e of storeEdges) {
       if (e.type === "parent_of") continue;
-      if (e.sourceId === e.targetId) continue;
-      const key = `${e.sourceId}>${e.targetId}`;
+      let fromId = e.sourceId;
+      let toId = e.targetId;
+      // Reroute hidden nodes to their cluster parent
+      if (hiddenNodeIds.has(fromId)) fromId = parentMap.get(fromId) ?? fromId;
+      if (hiddenNodeIds.has(toId)) toId = parentMap.get(toId) ?? toId;
+      if (fromId === toId) continue;
+      const key = `${fromId}>${toId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push({ edgeId: e.id, type: e.type, fromId: e.sourceId, toId: e.targetId });
+      result.push({ edgeId: e.id, type: e.type, fromId, toId });
     }
     return result;
-  }, [storeEdges]);
+  }, [storeEdges, hiddenNodeIds, parentMap]);
 
   // Connected nodes for selection highlighting
   const connectedIds = useMemo(() => {
@@ -183,6 +212,11 @@ export function GraphView() {
       document.removeEventListener("mouseup", onUp);
       const ds = dragState.current;
       if (ds && !ds.moved) {
+        // Click without drag: toggle cluster or select node
+        const isCluster = isClusterNode(ds.id, childrenMap);
+        if (isCluster) {
+          toggleCluster(ds.id);
+        }
         const node = storeNodes.find((n) => n.id === ds.id) ?? null;
         selectNode(node);
       }
@@ -191,8 +225,8 @@ export function GraphView() {
         if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
           api(`/nodes/${ds.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ x: pos.x, y: pos.y, position_pinned: 1 }),
-          }).catch(() => {});
+            body: JSON.stringify({ x: Math.round(pos.x * 10) / 10, y: Math.round(pos.y * 10) / 10, position_pinned: true }),
+          }).catch((err) => console.error("Failed to save position:", err));
         }
       }
       dragState.current = null;
@@ -242,6 +276,30 @@ export function GraphView() {
     );
   }
 
+  // Compute bounding box for expanded cluster's children
+  function clusterBounds(clusterId: string): { cx: number; cy: number; rx: number; ry: number } | null {
+    const children = childrenMap.get(clusterId) ?? [];
+    const clusterPos = posMap.get(clusterId);
+    if (!clusterPos || children.length === 0) return null;
+
+    let minX = clusterPos.x, maxX = clusterPos.x, minY = clusterPos.y, maxY = clusterPos.y;
+    for (const childId of children) {
+      const cp = posMap.get(childId);
+      if (!cp) continue;
+      minX = Math.min(minX, cp.x);
+      maxX = Math.max(maxX, cp.x);
+      minY = Math.min(minY, cp.y);
+      maxY = Math.max(maxY, cp.y);
+    }
+    const pad = 25;
+    return {
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      rx: (maxX - minX) / 2 + pad,
+      ry: (maxY - minY) / 2 + pad,
+    };
+  }
+
   // Empty state
   if (storeNodes.length === 0) {
     return (
@@ -287,6 +345,42 @@ export function GraphView() {
         <rect width="100%" height="100%" fill="url(#graph-dots)" pointerEvents="none" />
 
         <g style={{ transform: `translate(${vp.x}px,${vp.y}px) scale(${vp.z})`, transformOrigin: "0 0" }}>
+
+          {/* Expanded cluster boundaries (dotted ellipses) */}
+          {[...expandedClusters].map((clusterId) => {
+            const bounds = clusterBounds(clusterId);
+            if (!bounds) return null;
+            const cluster = storeNodes.find((n) => n.id === clusterId);
+            const dim = selId && selId !== clusterId && !connectedIds.has(clusterId);
+            return (
+              <g key={`boundary-${clusterId}`} style={{ opacity: dim ? 0.1 : 0.5, transition: "opacity 0.2s" }}>
+                <ellipse
+                  cx={bounds.cx}
+                  cy={bounds.cy}
+                  rx={Math.max(bounds.rx, 30)}
+                  ry={Math.max(bounds.ry, 30)}
+                  fill="none"
+                  stroke="#C0C0C0"
+                  strokeWidth={1}
+                  strokeDasharray="6,4"
+                  pointerEvents="none"
+                />
+                <text
+                  x={bounds.cx}
+                  y={bounds.cy - Math.max(bounds.ry, 30) - 6}
+                  textAnchor="middle"
+                  fontSize="6"
+                  fill="#BBB"
+                  letterSpacing="1.5"
+                  fontWeight="500"
+                  pointerEvents="none"
+                >
+                  {cluster?.name.toUpperCase() ?? ""}
+                </text>
+              </g>
+            );
+          })}
+
           {/* Goal → cluster connector lines */}
           {(() => {
             if (!goalNode) return null;
@@ -306,8 +400,8 @@ export function GraphView() {
                     key={`goal-${cluster.id}`}
                     x1={goalPos.x + (dx / dist) * 24}
                     y1={goalPos.y + (dy / dist) * 24}
-                    x2={cPos.x - (dx / dist) * 10}
-                    y2={cPos.y - (dy / dist) * 10}
+                    x2={cPos.x - (dx / dist) * 12}
+                    y2={cPos.y - (dy / dist) * 12}
                     stroke="#D0D0D0"
                     strokeWidth={0.8}
                     style={{ opacity: dim ? 0.08 : 0.4, transition: "opacity 0.2s" }}
@@ -351,6 +445,9 @@ export function GraphView() {
               const isSel = selId === cluster.id;
               const dim = selId && !isSel && !connectedIds.has(cluster.id);
               const isHovered = hoveredNode === cluster.id;
+              const isExpanded = expandedClusters.has(cluster.id);
+              const childCount = (childrenMap.get(cluster.id) ?? []).length;
+              const r = isExpanded ? 10 : 14; // collapsed clusters are bigger to indicate they contain children
               return (
                 <g
                   key={`cl-${cluster.id}`}
@@ -360,11 +457,38 @@ export function GraphView() {
                   onMouseLeave={() => setHoveredNode(null)}
                   style={{ opacity: dim ? 0.15 : 1, transition: "opacity 0.2s", cursor: "pointer" }}
                 >
-                  <circle cx={pos.x} cy={pos.y} r={isSel ? 12 : 10} fill={priorityColor(cluster.priority)} stroke={isSel ? "#1A1A1A" : "#FFF"} strokeWidth={isSel ? 2 : 1} />
-                  {statusDot(pos.x, pos.y, 10, cluster.status)}
-                  <text x={pos.x} y={pos.y + (isHovered ? 16 : 14)} textAnchor="middle" fontSize={isHovered ? 11 : 7} fontWeight={isSel || isHovered ? "600" : "500"} fill={isSel ? "#1A1A1A" : "#777"} pointerEvents="none" style={{ transition: "font-size 0.15s" }}>
+                  {/* Dotted ring around collapsed cluster to indicate it's a group */}
+                  {!isExpanded && (
+                    <circle
+                      cx={pos.x}
+                      cy={pos.y}
+                      r={r + 5}
+                      fill="none"
+                      stroke="#C0C0C0"
+                      strokeWidth={1}
+                      strokeDasharray="4,3"
+                      pointerEvents="none"
+                    />
+                  )}
+                  <circle cx={pos.x} cy={pos.y} r={r} fill={priorityColor(cluster.priority)} stroke={isSel ? "#1A1A1A" : "#FFF"} strokeWidth={isSel ? 2 : 1} />
+                  {/* Child count badge on collapsed clusters */}
+                  {!isExpanded && childCount > 0 && (
+                    <g pointerEvents="none">
+                      <circle cx={pos.x + r - 2} cy={pos.y - r + 2} r={6} fill="#1A1A1A" />
+                      <text x={pos.x + r - 2} y={pos.y - r + 5} textAnchor="middle" fontSize="7" fontWeight="600" fill="#FFF">
+                        {childCount}
+                      </text>
+                    </g>
+                  )}
+                  {statusDot(pos.x, pos.y, r, cluster.status)}
+                  <text x={pos.x} y={pos.y + r + 10} textAnchor="middle" fontSize={isHovered ? 11 : 8} fontWeight={isSel || isHovered ? "600" : "500"} fill={isSel ? "#1A1A1A" : "#777"} pointerEvents="none" style={{ transition: "font-size 0.15s" }}>
                     {cluster.name.length > 24 ? cluster.name.slice(0, 22) + "…" : cluster.name}
                   </text>
+                  {!isExpanded && (
+                    <text x={pos.x} y={pos.y + r + 19} textAnchor="middle" fontSize="6" fill="#BBB" pointerEvents="none">
+                      click to expand
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -388,9 +512,9 @@ export function GraphView() {
             );
           })()}
 
-          {/* Task nodes */}
+          {/* Task nodes (only visible if their cluster is expanded or they have no cluster) */}
           {storeNodes
-            .filter((n) => !isClusterNode(n.id, childrenMap) && !isGoalNode(n))
+            .filter((n) => !isClusterNode(n.id, childrenMap) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
             .map((node) => {
               const pos = posMap.get(node.id);
               if (!pos) return null;
