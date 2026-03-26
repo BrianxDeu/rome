@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@rome/shared": "*",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.7.0",
