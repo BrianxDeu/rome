@@ -139,7 +139,7 @@ npm run test --workspace=packages/server
 ### What Still Needs Work
 1. **Graph view**: Still too spread out. Needs tighter layout, more Obsidian-like. Node groups should cluster closer to center.
 2. **Cross-view sync**: Changes in Board should instantly reflect in Graph/Gantt/Budget (mostly works via Zustand store, but some operations need full refetch)
-3. **Deployment**: Railway project needs to be created and connected to BrianxDeu/rome
+3. ~~**Deployment**: Railway project needs to be created and connected to BrianxDeu/rome~~ — DONE, live at rome-production.up.railway.app
 
 ### Reference Files (User's Original Design)
 The frontend was ported from these single-file HTML apps:
@@ -152,3 +152,20 @@ The frontend was ported from these single-file HTML apps:
 - Serge — cUAS & R&D Lead, thinks in webs/connections
 - Scott — hardware/testing
 - Pat — CEO, needs investor-grade presentations
+
+## Deploy Configuration (configured by /setup-deploy)
+- Platform: Railway (Dockerfile builder)
+- Production URL: https://rome-production.up.railway.app
+- Deploy repo: BrianxDeu/rome (mirrored from bsulee/rome via GitHub Actions)
+- Deploy workflow: Auto-deploy on push to main (Railway watches BrianxDeu/rome)
+- Deploy chain: push to bsulee/rome → sync workflow mirrors to BrianxDeu/rome → Railway auto-deploys
+- Merge method: squash
+- Project type: web app (Express API + React SPA)
+- Post-deploy health check: https://rome-production.up.railway.app/health
+
+### Custom deploy hooks
+- Pre-merge: `npm run build --workspace=packages/shared && npm run typecheck --workspace=packages/server && npm run typecheck --workspace=packages/client && npm run test --workspace=packages/server`
+- Deploy trigger: automatic on push to main (via Railway)
+- Deploy status: poll https://rome-production.up.railway.app/health
+- Health check: https://rome-production.up.railway.app/health
+- SQLite persistence: Railway volume mounted at /data (DATABASE_PATH=/data/rome.db)
