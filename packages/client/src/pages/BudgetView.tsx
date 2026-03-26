@@ -73,7 +73,6 @@ export function BudgetView() {
   // Budget items
   const budgetItems = useMemo(() => {
     let items = leafNodes
-      .filter((n) => (n.budget || 0) > 0 || budgetFilter !== "all")
       .filter((n) => budgetFilter === "all" || n.workstream === budgetFilter);
 
     items.sort((a, b) => {
@@ -143,7 +142,8 @@ export function BudgetView() {
           </TableHeader>
           <TableBody>
             {["P0", "P1", "P2", "P3"].map((p) => {
-              const pn = leafNodes.filter((n) => n.priority === p);
+              const filtered = budgetFilter === "all" ? leafNodes : leafNodes.filter((n) => n.workstream === budgetFilter);
+              const pn = filtered.filter((n) => n.priority === p);
               return (
                 <TableRow key={p}>
                   <TableCell>
