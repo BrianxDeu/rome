@@ -37,10 +37,11 @@ export function GraphView() {
     [storeEdges],
   );
 
-  // Workstream header: top-level node with no parent, no workstream field, not goal
+  // Workstream header: no parent, no ws field, not goal, AND has children
+  // (nodes with no parent + no ws + no children are just orphan nodes, not ws headers)
   const isWsHeader = useCallback(
-    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream,
-    [parentMap],
+    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream && (childrenMap.get(n.id)?.length ?? 0) > 0,
+    [parentMap, childrenMap],
   );
 
   // "Structural" nodes: cluster parents OR workstream headers (rendered as big nodes, not task dots)

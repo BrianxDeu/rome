@@ -72,16 +72,44 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     return Array.from(ws).sort();
   }, [nodes, parentMap]);
 
-  // A workstream header is a top-level node with no parent (may or may not have children yet)
-  // Excludes goal nodes and leaf task nodes (which have a workstream field set)
+  // A workstream header: no parent, no workstream field, has children (or was just created via +STREAM)
+  // We check children OR the node's name appears in the workstream field of other nodes
+  const wsFieldValues = useMemo(() => {
+    const vals = new Set<string>();
+    for (const n of nodes) {
+      if (n.workstream) vals.add(n.workstream);
+    }
+    return vals;
+  }, [nodes]);
+
   const isWsHeader = useCallback(
-    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream,
-    [parentMap],
+    (n: Node) => {
+      if (parentMap.has(n.id) || isGoalNode(n) || n.workstream) return false;
+      // Has children → definitely a ws header
+      if ((childrenMap.get(n.id)?.length ?? 0) > 0) return true;
+      // Name matches a workstream field value on other nodes → ws header
+      if (wsFieldValues.has(n.name)) return true;
+      return false;
+    },
+    [parentMap, childrenMap, wsFieldValues],
   );
 
+  // Identify node group IDs: direct children of ws headers (they're structural, not tasks)
+  const nodeGroupIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const n of nodes) {
+      if (isWsHeader(n)) {
+        for (const childId of childrenMap.get(n.id) ?? []) {
+          ids.add(childId);
+        }
+      }
+    }
+    return ids;
+  }, [nodes, isWsHeader, childrenMap]);
+
   const leafNodes = useMemo(
-    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap) && !isWsHeader(n)),
-    [nodes, childrenMap, isWsHeader],
+    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap) && !isWsHeader(n) && !nodeGroupIds.has(n.id)),
+    [nodes, childrenMap, isWsHeader, nodeGroupIds],
   );
 
   function toggleBoardSub(subId: string) {
@@ -668,25 +696,31 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       )}
       {workstreams.map((ws) => {
         const color = wsColor(ws, workstreams);
-        const allGroupNodes = leafNodes.filter((n) => n.workstream === ws);
-        // Find clusters in this workstream:
-        // 1. Parents of leaf nodes (existing pattern)
-        // 2. Children of the workstream header (new node groups that may have no children yet)
-        const clusterIds = new Set<string>();
-        for (const n of allGroupNodes) {
-          const parent = parentMap.get(n.id);
-          if (parent) clusterIds.add(parent);
-        }
-        // Also find the workstream header and include its direct children as clusters
+        // Find the workstream header node (top-level, no ws field, name matches)
         const wsHeader = nodes.find((n) => n.name === ws && !parentMap.has(n.id) && !n.workstream);
+
+        // Find cluster (node group) IDs in this workstream:
+        // These are direct children of the ws header — they are node groups, not tasks
+        const clusterIds = new Set<string>();
         if (wsHeader) {
           for (const childId of childrenMap.get(wsHeader.id) ?? []) {
             clusterIds.add(childId);
           }
         }
+        // Also find cluster parents of leaf nodes (catches clusters not under a ws header)
+        const allWsLeafs = leafNodes.filter((n) => n.workstream === ws);
+        for (const n of allWsLeafs) {
+          const parent = parentMap.get(n.id);
+          if (parent && parent !== wsHeader?.id) clusterIds.add(parent);
+        }
+
         const clusters = Array.from(clusterIds)
           .map((id) => nodes.find((n) => n.id === id))
           .filter(Boolean) as Node[];
+
+        // Task nodes in this workstream: leaf nodes that belong to a cluster (have a parent)
+        // OR are ungrouped (no parent, but not a cluster themselves)
+        const allGroupNodes = allWsLeafs.filter((n) => !clusterIds.has(n.id));
         const ungrouped = allGroupNodes.filter((n) => !parentMap.has(n.id));
         const ungroupedKey = ws + "/_ungrouped";
 
