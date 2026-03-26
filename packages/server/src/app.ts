@@ -32,7 +32,9 @@ export function createApp(db: Db) {
 
   // OAuth discovery metadata
   app.get("/.well-known/oauth-authorization-server", (_req, res) => {
-    const base = `${_req.protocol}://${_req.get("host")}`;
+    // Railway terminates TLS at the proxy — always use https in production
+    const proto = _req.get("x-forwarded-proto") || _req.protocol;
+    const base = `${proto}://${_req.get("host")}`;
     res.json({
       issuer: base,
       authorization_endpoint: `${base}/oauth/authorize`,

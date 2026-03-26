@@ -371,14 +371,19 @@ export function createMcpHandler(db: Db): RequestHandler {
       return;
     }
 
-    if (req.method !== "POST") {
+    // Accept POST (tool calls), GET (SSE stream), DELETE (session cleanup)
+    if (!["POST", "GET", "DELETE"].includes(req.method)) {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
+    // GET without Accept: text/event-stream is likely a browser probe — return info
+    if (req.method === "GET" && !req.headers.accept?.includes("text/event-stream")) {
+      res.json({ name: "rome-mcp", version: "1.0.0", status: "ok" });
+      return;
+    }
+
     try {
-      // Stateless mode: fresh McpServer + transport per request.
-      // No session management needed for 2 users with simple tool calls.
       const mcp = createMcpServer(db);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
