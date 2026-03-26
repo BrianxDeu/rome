@@ -110,6 +110,7 @@ export function NodePanel() {
   }
 
   async function handleDelete() {
+    if (!confirm(`Delete "${selectedNode!.name}"? This cannot be undone.`)) return;
     try {
       await api(`/nodes/${selectedNode!.id}`, { method: "DELETE" });
       removeNode(selectedNode!.id);

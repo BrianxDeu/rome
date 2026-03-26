@@ -655,7 +655,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 );
               })()}
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <Button variant="destructive" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { handleDelete(n.id); setBoardExpanded(null); }}>DELETE</Button>
+                <Button variant="destructive" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { if (!confirm(`Delete "${n.name}"? This cannot be undone.`)) return; handleDelete(n.id); setBoardExpanded(null); }}>DELETE</Button>
               </div>
             </div>
           )}
