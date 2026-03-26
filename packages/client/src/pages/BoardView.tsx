@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useGraphStore } from "../stores/graphStore";
 import { api } from "../api";
 import type { Node, Edge } from "@rome/shared";
@@ -48,7 +48,8 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const removeEdge = useGraphStore((s) => s.removeEdge);
 
   const [boardExpanded, setBoardExpanded] = useState<string | null>(null);
-  const [boardCollapsed, setBoardCollapsed] = useState<Set<string>>(new Set());
+  // Start with all node groups collapsed — use a sentinel to initialize once
+  const [boardCollapsed, setBoardCollapsed] = useState<Set<string> | null>(null);
   const [boardOrder, setBoardOrder] = useState<Record<string, string[]>>({});
   const [boardAddGroup, setBoardAddGroup] = useState<string | null>(null);
   const [boardAddLabel, setBoardAddLabel] = useState("");
@@ -114,9 +115,25 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
   function toggleBoardSub(subId: string) {
     setBoardCollapsed((prev) => {
+      // If null (initial state = all collapsed), create set with just this one removed (= expanded)
+      if (!prev) return new Set<string>(); // empty set = nothing explicitly collapsed, but we flip logic below
       const n = new Set(prev);
       if (n.has(subId)) n.delete(subId);
       else n.add(subId);
+      return n;
+    });
+  }
+
+  // Track which subgroups are EXPANDED (simpler than tracking collapsed)
+  const [boardExpandedSubs, setBoardExpandedSubs] = useState<Set<string>>(new Set());
+  function isSubCollapsed(subKey: string): boolean {
+    return !boardExpandedSubs.has(subKey);
+  }
+  function toggleSub(subKey: string) {
+    setBoardExpandedSubs((prev) => {
+      const n = new Set(prev);
+      if (n.has(subKey)) n.delete(subKey);
+      else n.add(subKey);
       return n;
     });
   }
@@ -744,13 +761,13 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               {clusters.map((cluster) => {
                 const children = allGroupNodes.filter((n) => parentMap.get(n.id) === cluster.id);
                 const subKey = ws + "/" + cluster.id;
-                const isSubCol = boardCollapsed.has(subKey);
+                const isSubCol = isSubCollapsed(subKey);
                 const orderedIds = getBoardOrder(subKey, children.map((n) => n.id));
                 const orderedChildren = orderedIds.map((id) => children.find((n) => n.id === id)).filter(Boolean) as Node[];
                 const clColor = priorityColor(cluster.priority) !== "#999" ? priorityColor(cluster.priority) : color;
                 return (
                   <div key={cluster.id} className="board-subgroup">
-                    <div className="board-subgroup-header" onClick={() => toggleBoardSub(subKey)} style={{ borderLeftColor: clColor, borderLeftWidth: 3 }}>
+                    <div className="board-subgroup-header" onClick={() => toggleSub(subKey)} style={{ borderLeftColor: clColor, borderLeftWidth: 3 }}>
                       <div className="board-subgroup-toggle">{isSubCol ? "\u25B6" : "\u25BC"}</div>
                       <div
                         className="board-subgroup-label"
@@ -803,12 +820,12 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               })}
               {ungrouped.length > 0 && clusters.length > 0 && (
                 <div className="board-subgroup">
-                  <div className="board-subgroup-header" onClick={() => toggleBoardSub(ungroupedKey)} style={{ borderLeftColor: "#999", borderLeftWidth: 3 }}>
-                    <div className="board-subgroup-toggle">{boardCollapsed.has(ungroupedKey) ? "\u25B6" : "\u25BC"}</div>
+                  <div className="board-subgroup-header" onClick={() => toggleSub(ungroupedKey)} style={{ borderLeftColor: "#999", borderLeftWidth: 3 }}>
+                    <div className="board-subgroup-toggle">{isSubCollapsed(ungroupedKey) ? "\u25B6" : "\u25BC"}</div>
                     <div className="board-subgroup-label" style={{ color: "#777" }}>Other</div>
                     <div className="board-subgroup-count">{ungrouped.length}</div>
                   </div>
-                  {!boardCollapsed.has(ungroupedKey) && (
+                  {!isSubCollapsed(ungroupedKey) && (
                     <div
                       className="board-subgroup-cards"
                       onDragOver={onSectionDragOver}

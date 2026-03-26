@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { api } from "../api";
 import { useGraphStore } from "../stores/graphStore";
-import type { Node } from "@rome/shared";
+import type { Node, Edge } from "@rome/shared";
+import { buildClusterMaps } from "../constants";
+import { isGoalNode } from "../utils/graphLayout";
 import {
   Dialog,
   DialogContent,
@@ -23,12 +25,32 @@ const PRESET_PRIORITIES = ["P0", "P1", "P2", "P3"];
 
 export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: AddNodeModalProps) {
   const addNode = useGraphStore((s) => s.addNode);
-  const addEdge = useGraphStore((s) => s.addEdge);
+  const setNodes = useGraphStore((s) => s.setNodes);
+  const setEdges = useGraphStore((s) => s.setEdges);
   const nodes = useGraphStore((s) => s.nodes);
+  const edges = useGraphStore((s) => s.edges);
+
+  const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
+
+  // Build hierarchy for the "Place under" dropdown
+  const hierarchy = useMemo(() => {
+    // Workstream headers: no parent, no ws field, not goal
+    const wsHeaders = nodes.filter((n) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream);
+    const groups: Array<{ wsHeader: Node; nodeGroups: Node[] }> = [];
+
+    for (const ws of wsHeaders) {
+      const ngIds = childrenMap.get(ws.id) ?? [];
+      const nodeGroups = ngIds
+        .map((id) => nodes.find((n) => n.id === id))
+        .filter(Boolean) as Node[];
+      groups.push({ wsHeader: ws, nodeGroups });
+    }
+    return groups;
+  }, [nodes, parentMap, childrenMap]);
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
-  const [workstream, setWorkstream] = useState(defaultWorkstream ?? "");
+  const [parentId, setParentId] = useState(defaultClusterId ?? "");
   const [priority, setPriority] = useState("P2");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -36,8 +58,16 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
   const [responsible, setResponsible] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Derive existing workstream names for suggestions
-  const existingWorkstreams = Array.from(new Set(nodes.map((n) => n.workstream).filter(Boolean))) as string[];
+  // Resolve workstream from selected parent
+  const resolvedWorkstream = useMemo(() => {
+    if (defaultWorkstream) return defaultWorkstream;
+    if (!parentId) return "";
+    // Check if parentId is a workstream header
+    const parentNode = nodes.find((n) => n.id === parentId);
+    if (!parentNode) return "";
+    // If parent has workstream field, use it. Otherwise parent IS the workstream header — use its name.
+    return parentNode.workstream || parentNode.name;
+  }, [parentId, nodes, defaultWorkstream]);
 
   async function handleSubmit() {
     if (!name.trim()) return;
@@ -45,7 +75,7 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
     try {
       const body: Record<string, unknown> = {
         name: name.trim(),
-        workstream: workstream.trim() || null,
+        workstream: resolvedWorkstream || null,
         priority,
         status: "not_started",
       };
@@ -60,21 +90,25 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         method: "POST",
         body: JSON.stringify(body),
       });
-      addNode(node);
 
-      // If adding inside a cluster, create parent_of edge
-      if (defaultClusterId) {
-        const edge = await api<import("@rome/shared").Edge>("/edges", {
+      // Create parent_of edge if a parent is selected
+      const effectiveParent = defaultClusterId || parentId;
+      if (effectiveParent) {
+        await api<Edge>("/edges", {
           method: "POST",
-          body: JSON.stringify({
-            source_id: defaultClusterId,
-            target_id: node.id,
-            type: "parent_of",
-          }),
+          body: JSON.stringify({ source_id: effectiveParent, target_id: node.id, type: "parent_of" }),
         });
-        addEdge(edge);
+        // Also create produces edge: node → parent (feeds into)
+        await api<Edge>("/edges", {
+          method: "POST",
+          body: JSON.stringify({ source_id: node.id, target_id: effectiveParent, type: "produces" }),
+        });
       }
 
+      // Refetch for consistency
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
       onClose();
     } catch {
       // api() handles errors
@@ -102,7 +136,7 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
   const steps = [
     { label: "Name", required: true },
-    { label: "Workstream", required: false },
+    { label: "Place under", required: false },
     { label: "Priority", required: false },
     { label: "Dates", required: false },
     { label: "Budget", required: false },
@@ -146,23 +180,29 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
           </div>
         )}
 
-        {/* Step 1: Workstream */}
-        {step >= 1 && (
+        {/* Step 1: Place under (workstream or node group) */}
+        {step >= 1 && !defaultClusterId && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Workstream</Label>
-            <Input
+            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Place under</Label>
+            <select
+              className="w-full rounded-md border border-[#E0E0E0] bg-white px-3 py-2 font-[Tomorrow] text-[13px]"
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
               autoFocus={step === 1}
-              className="font-[Tomorrow] text-[13px]"
-              list="ws-suggestions"
-              placeholder="e.g. Design, Engineering..."
-              value={workstream}
-              onChange={(e) => setWorkstream(e.target.value)}
-            />
-            <datalist id="ws-suggestions">
-              {existingWorkstreams.map((ws) => (
-                <option key={ws} value={ws} />
+            >
+              <option value="">None (standalone)</option>
+              {hierarchy.map(({ wsHeader, nodeGroups }) => (
+                <optgroup key={wsHeader.id} label={wsHeader.name}>
+                  <option value={wsHeader.id}>↳ {wsHeader.name} (workstream)</option>
+                  {nodeGroups.map((ng) => (
+                    <option key={ng.id} value={ng.id}>↳ ↳ {ng.name}</option>
+                  ))}
+                </optgroup>
               ))}
-            </datalist>
+            </select>
+            {resolvedWorkstream && (
+              <div className="mt-1 text-[9px] text-[#999]">Workstream: {resolvedWorkstream}</div>
+            )}
           </div>
         )}
 
