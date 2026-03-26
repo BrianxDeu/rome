@@ -462,31 +462,42 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                     {incoming.length === 0 && outgoing.length === 0 && (
                       <div style={{ fontSize: 9, color: "#BBB", marginBottom: 4 }}>No dependencies yet</div>
                     )}
-                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                      <select className="dp-input" style={{ fontSize: 9, flex: 1 }} value="" onChange={async (ev) => {
-                        const val = ev.target.value;
-                        if (!val) return;
-                        const [edgeType, targetId] = val.split("|");
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
+                        const targetId = ev.target.value;
+                        if (!targetId) return;
                         try {
                           const edge = await api<Edge>("/edges", {
                             method: "POST",
-                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: edgeType }),
+                            body: JSON.stringify({ source_id: targetId, target_id: n.id, type: "depends_on" }),
                           });
                           addEdge(edge);
-                          // Refetch to sync
                           const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
                           setNodes(graph.nodes);
                           setEdges(graph.edges);
                         } catch (err) { console.error("[BoardView] add dep:", err); }
                         ev.target.value = "";
                       }}>
-                        <option value="">+ Add...</option>
-                        <optgroup label="Blocks">
-                          {candidateNodes.map((nd) => <option key={`b-${nd.id}`} value={`blocker|${nd.id}`}>{nd.name}</option>)}
-                        </optgroup>
-                        <optgroup label="Depends on">
-                          {candidateNodes.map((nd) => <option key={`d-${nd.id}`} value={`depends_on|${nd.id}`}>{nd.name}</option>)}
-                        </optgroup>
+                        <option value="">+ Add dependency...</option>
+                        {candidateNodes.map((nd) => <option key={`d-${nd.id}`} value={nd.id}>{nd.name}</option>)}
+                      </select>
+                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
+                        const targetId = ev.target.value;
+                        if (!targetId) return;
+                        try {
+                          const edge = await api<Edge>("/edges", {
+                            method: "POST",
+                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: "blocker" }),
+                          });
+                          addEdge(edge);
+                          const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+                          setNodes(graph.nodes);
+                          setEdges(graph.edges);
+                        } catch (err) { console.error("[BoardView] add blocker:", err); }
+                        ev.target.value = "";
+                      }}>
+                        <option value="">+ Add blocker (outgoing)...</option>
+                        {candidateNodes.map((nd) => <option key={`b-${nd.id}`} value={nd.id}>{nd.name}</option>)}
                       </select>
                     </div>
                   </div>

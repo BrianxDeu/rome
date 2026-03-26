@@ -119,15 +119,29 @@ export function NodePanel() {
     }
   }
 
+  const setNodes = useGraphStore((s) => s.setNodes);
+  const setEdges = useGraphStore((s) => s.setEdges);
+
+  async function refetchGraph() {
+    try {
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+    } catch (err) {
+      console.error("Failed to refetch graph:", err);
+    }
+  }
+
   async function handleAddEdge(targetId: string, direction: "incoming" | "outgoing") {
     const sourceId = direction === "incoming" ? targetId : selectedNode!.id;
     const tgtId = direction === "incoming" ? selectedNode!.id : targetId;
     try {
       const edge = await api<Edge>("/edges", {
         method: "POST",
-        body: JSON.stringify({ source_id: sourceId, target_id: tgtId, type: "blocker" }),
+        body: JSON.stringify({ source_id: sourceId, target_id: tgtId, type: direction === "incoming" ? "depends_on" : "blocker" }),
       });
       addEdge(edge);
+      await refetchGraph();
     } catch (err) {
       console.error("Failed to add edge:", err);
     }
@@ -137,6 +151,7 @@ export function NodePanel() {
     try {
       await api(`/edges/${edgeId}`, { method: "DELETE" });
       removeEdge(edgeId);
+      await refetchGraph();
     } catch (err) {
       console.error("Failed to remove edge:", err);
     }
