@@ -37,9 +37,9 @@ export function GraphView() {
     [storeEdges],
   );
 
-  // Workstream header: name matches workstream, no parent in the hierarchy
+  // Workstream header: top-level node with no parent, no workstream field, not goal
   const isWsHeader = useCallback(
-    (n: Node) => !!(n.workstream && n.name === n.workstream && !parentMap.has(n.id) && !isGoalNode(n)),
+    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream,
     [parentMap],
   );
 

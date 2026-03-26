@@ -34,18 +34,23 @@ export function AddWorkstreamModal({ onClose }: AddWorkstreamModalProps) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      // Create a workstream header node — the workstream name IS the node name
-      // and the workstream field groups it on the board
+      // Create a workstream header node — name IS the workstream display name
+      // workstream field is null (matching production data pattern — ws headers sit above the hierarchy)
       const node = await api<Node>("/nodes", {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
-          workstream: name.trim(),
           priority: "P2",
           status: "not_started",
         }),
       });
       addNode(node);
+      // Refetch to ensure the new node is picked up consistently
+      const graph = await api<{ nodes: Node[]; edges: import("@rome/shared").Edge[] }>("/graph");
+      const setNodes = useGraphStore.getState().setNodes;
+      const setEdges = useGraphStore.getState().setEdges;
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
       onClose();
     } catch {
       // api() handles errors

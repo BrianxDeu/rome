@@ -12,6 +12,7 @@ import {
   isClusterNode,
   parseRaci,
 } from "../constants";
+import { isGoalNode } from "../utils/graphLayout";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -57,15 +58,24 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
   const workstreams = useMemo(() => {
     const ws = new Set<string>();
+    // From leaf node workstream fields (existing pattern)
     for (const n of nodes) {
       if (n.workstream) ws.add(n.workstream);
     }
+    // Also include top-level nodes with no parent as workstreams (ws header nodes)
+    // These may be new empty workstreams or existing ones with children
+    for (const n of nodes) {
+      if (!parentMap.has(n.id) && !isGoalNode(n) && n.name) {
+        ws.add(n.name);
+      }
+    }
     return Array.from(ws).sort();
-  }, [nodes]);
+  }, [nodes, parentMap]);
 
-  // A workstream header is a node whose name matches its workstream and has no parent
+  // A workstream header is a top-level node with no parent (may or may not have children yet)
+  // Excludes goal nodes and leaf task nodes (which have a workstream field set)
   const isWsHeader = useCallback(
-    (n: Node) => n.workstream && n.name === n.workstream && !parentMap.has(n.id),
+    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream,
     [parentMap],
   );
 
@@ -336,8 +346,8 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   async function boardAddCluster(workstream: string) {
     if (!boardAddLabel.trim()) return;
     try {
-      // Find the workstream header node (name matches workstream, no parent)
-      const wsHeader = nodes.find((n) => n.workstream === workstream && n.name === workstream && !parentMap.has(n.id));
+      // Find the workstream header node — top-level node whose name matches the workstream display name
+      const wsHeader = nodes.find((n) => n.name === workstream && !parentMap.has(n.id) && !n.workstream);
 
       // Create the new node group node
       const node = await api<Node>("/nodes", {
@@ -668,7 +678,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
           if (parent) clusterIds.add(parent);
         }
         // Also find the workstream header and include its direct children as clusters
-        const wsHeader = nodes.find((n) => n.workstream === ws && n.name === ws && !parentMap.has(n.id));
+        const wsHeader = nodes.find((n) => n.name === ws && !parentMap.has(n.id) && !n.workstream);
         if (wsHeader) {
           for (const childId of childrenMap.get(wsHeader.id) ?? []) {
             clusterIds.add(childId);
