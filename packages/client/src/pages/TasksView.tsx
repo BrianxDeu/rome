@@ -18,11 +18,15 @@ export function TasksView() {
   const [newText, setNewText] = useState("");
   const [newPriority, setNewPriority] = useState("P1");
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const knownIdsRef = useRef<Set<string>>(new Set());
   const token = useAuthStore((s) => s.token);
 
   // Fetch tasks on mount
   useEffect(() => {
-    api<PersonalTask[]>("/tasks").then(setTasks).catch(console.error);
+    api<PersonalTask[]>("/tasks").then((fetched) => {
+      fetched.forEach((t) => knownIdsRef.current.add(t.id));
+      setTasks(fetched);
+    }).catch(console.error);
   }, []);
 
   function startDeleteTimer(taskId: string) {
@@ -53,6 +57,8 @@ export function TasksView() {
     const socket = io({ auth: { token } });
 
     socket.on("task:created", (task: PersonalTask) => {
+      if (knownIdsRef.current.has(task.id)) return;
+      knownIdsRef.current.add(task.id);
       setTasks((prev) => {
         if (prev.some((t) => t.id === task.id)) return prev;
         return [...prev, task];
@@ -94,7 +100,11 @@ export function TasksView() {
         method: "POST",
         body: JSON.stringify({ text, priority: newPriority }),
       });
-      setTasks((prev) => [...prev, task]);
+      knownIdsRef.current.add(task.id);
+      setTasks((prev) => {
+        if (prev.some((t) => t.id === task.id)) return prev;
+        return [...prev, task];
+      });
       setNewText("");
     } catch (e) {
       console.error("Failed to add task:", e);
