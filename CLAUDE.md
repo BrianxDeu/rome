@@ -34,7 +34,7 @@ In-house project management software for DxD (5-10 users).
 
 npm workspaces monorepo:
 - `packages/shared` — TypeScript types and Drizzle ORM schema (camelCase field names)
-- `packages/server` — Express API + Socket.IO + SQLite via Drizzle ORM
+- `packages/server` — Express API + Socket.IO + SQLite via Drizzle ORM + MCP server (6 tools)
 - `packages/client` — React 19 + Custom SVG Graph + Zustand + Vite + Tailwind v4 + shadcn/ui
 - `packages/cli` — Commander.js CLI wrapping REST API
 
@@ -113,8 +113,40 @@ npm run test --workspace=packages/server
 - The graph-bg rect also needs `pointer-events: none`
 
 ### Board add-node reactivity
-- After creating a node + parent_of edge via API, refetch `/api/graph` to update the store
+- After creating a node + parent_of edge via API, **always refetch `/api/graph`** to update the store
 - Individual `addNode` + `addEdge` calls don't trigger `buildClusterMaps` recalculation in the same render cycle
+- This applies to NodePanel edge add/remove too — must refetchGraph() after edge operations
+
+### Workstream header identification — THE CRITICAL PATTERN
+- Ws headers have `workstream: null` in the database (NOT `workstream: "their own name"`)
+- `isWsHeader` check: `!parentMap.has(n.id) && !isGoalNode(n) && !n.workstream`
+- To find a ws header by workstream name: `nodes.find(n => n.name === wsName && !parentMap.has(n.id) && !n.workstream)`
+- The Board derives workstream names from leaf node `workstream` fields AND from top-level parentless node names
+- `isClusterNode(id, childrenMap)` only returns true for nodes WITH children — empty new node groups fail this check
+- Node groups that are children of ws headers must be tracked via `nodeGroupIds` set and excluded from `leafNodes`
+- Board cluster detection must check BOTH: (1) parents of leaf nodes AND (2) direct children of the ws header
+
+### Zod boolean validation is strict
+- `z.boolean()` only accepts `true`/`false`, NOT `1`/`0`
+- Sending `position_pinned: 1` instead of `position_pinned: true` causes silent PATCH failure
+- The `.catch(() => {})` pattern swallows these errors — always log: `.catch((err) => console.error(...))`
+
+### Graph position persistence — stale closure bug
+- On drag end, use coordinates from the drag state ref (`ds.lastX`/`ds.lastY`), NOT from `posMap.get(id)`
+- `posMap` is rebuilt from `computeLayout()` on each React render — the closure captures the pre-drag positions
+- **Group drag**: capture all descendant start positions at mousedown into `descendantStarts` map
+- Apply `startPos + totalDelta` on each frame, NOT frame-by-frame deltas (which get overwritten by computeLayout)
+- Only drag descendants when the parent is COLLAPSED — expanded parents move alone
+
+### Auto-edge creation on node/group creation
+- When creating a task under a node group: create `parent_of` edge (group → task) AND `produces` edge (task → group)
+- When creating a node group under a workstream: create `parent_of` edge (ws → group) AND `produces` edge (group → ws)
+- The `produces` edges make arrows visible in the Graph view — without them nodes appear disconnected
+
+### Physics simulation — abandoned, lessons learned
+- d3-force physics was attempted and abandoned — nodes collapsed on drag, anchors made it indistinguishable from static
+- The d3-force package is still installed but unused — can be removed
+- **Decision: static layout only.** computeLayout() + drag + collapsible clusters is the current approach
 
 ### Socket.IO echo causes duplicates
 - When creating data via API, the server broadcasts a Socket.IO event to ALL sockets in the user's room, INCLUDING the socket that triggered the request
@@ -157,6 +189,17 @@ npm run test --workspace=packages/server
 - OAuth codes and client registrations are stored in-memory (lost on every deploy)
 - If MCP disconnects, the most likely cause is a Railway deploy that killed the connection
 
+### CSS specificity: index.css beats Tailwind classes on nested elements
+- `index.css` has selectors like `.board-card-body textarea` (specificity 0,1,1)
+- Tailwind utility classes like `min-h-28`, `px-3.5` have specificity (0,1,0)
+- **The old CSS always wins** — Tailwind changes on components inside these selectors are silently ignored
+- **Fix**: when styling shadcn components (Input, Textarea, etc.), either:
+  1. Remove the conflicting properties from `index.css` (preferred), or
+  2. Use inline `style={{ }}` on the component (guaranteed to override), or
+  3. Never rely on Tailwind classes for properties already set by `index.css` descendant selectors
+- Before changing any visual property via Tailwind, `grep` for that property in `index.css` to check for conflicts
+- The `.board-card-body textarea`, `.dp-input`, `.dp-textarea` rules are the main offenders
+
 ### Always use feature branches for production changes
 - Never push hotfixes directly to main — use `git checkout -b fix/whatever`, then `/ship` + `/land-and-deploy`
 - The `/ship` workflow runs tests, code review, and adversarial review that catch bugs localhost misses
@@ -174,7 +217,7 @@ npm run test --workspace=packages/server
 - **Detail Panel**: RACI (4 fields), dependency management (add/remove edges), status/priority/dates/budget editing
 - **TopBar**: DXD HALO OPS branding, Tasks/Board/Graph/Gantt/Budget tabs, +NODE/+GROUP/+STREAM/SHARE/LOGOUT buttons
 - **API**: Full CRUD for nodes/edges/personal tasks, graph endpoint, budget rollup, auth (JWT), Socket.IO real-time sync with per-user rooms
-- **MCP**: 4 tools (rome_create_task, rome_get_graph, rome_update_task, rome_status_report), OAuth auth, error boundary, request logging
+- **MCP**: 6 tools (rome_get_graph, rome_create_task, rome_create_node_group, rome_create_edge, rome_update_node, rome_status_report), OAuth auth, error boundary, request logging
 - **Deployment**: Live at rome-production.up.railway.app, auto-deploy on push to main
 
 ### Data Model
