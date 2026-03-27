@@ -113,7 +113,7 @@ a {
 .dp-body { padding:16px 20px; }
 .dp-field { margin-bottom:14px; }
 .dp-label { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#999; margin-bottom:4px; display:block; }
-.dp-input { width:100%; padding:7px 10px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; }
+.dp-input { width:100%; padding:7px 14px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; }
 .dp-input:focus { outline:none; border-color:#B81917; background:#FFF; }
 .dp-textarea { width:100%; padding:7px 10px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; min-height:70px; resize:vertical; }
 .dp-textarea:focus { outline:none; border-color:#B81917; background:#FFF; }

@@ -190,7 +190,7 @@ export function NodePanel() {
           <Button variant="ghost" size="icon-xs" onClick={() => selectNode(null)}>x</Button>
         </div>
         <Badge variant="outline" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{form.priority}</Badge>
-        <Badge variant="outline" className="ml-1 font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>
+        <Badge variant="outline" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30", marginLeft: 8 }}>
           {statusLabel(form.status ?? "not_started")}
         </Badge>
       </div>
@@ -245,45 +245,37 @@ export function NodePanel() {
           </div>
         </div>
         <div className="dp-field">
-          <Label className="dp-label">This depends on (incoming)</Label>
-          {incomingEdges.map((e) => (
-            <div key={e.id} className="dp-dep">
-              <span style={{ flex: 1 }}>{nodeName(e.sourceId)}</span>
-              <select
-                style={{ fontSize: 8, padding: "2px 4px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginRight: 4 }}
-                value={e.type}
-                onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
-              >
-                {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <Button variant="ghost" size="icon-xs" className="h-5 w-5 text-[#999] hover:text-[#B81917]" onClick={() => handleRemoveEdge(e.id)}>x</Button>
-            </div>
-          ))}
+          <Label className="dp-label">Relations</Label>
+          {[
+            ...incomingEdges.map((e) => ({ ...e, direction: "incoming" as const })),
+            ...outgoingEdges.map((e) => ({ ...e, direction: "outgoing" as const })),
+          ].map((e) => {
+            const otherName = e.direction === "incoming" ? nodeName(e.sourceId) : nodeName(e.targetId);
+            return (
+              <div key={e.id} className="dp-dep" style={{ fontSize: 11, padding: "8px 10px" }}>
+                <span style={{ flex: 1 }}>
+                  {e.direction === "incoming"
+                    ? <>{otherName} <span style={{ color: "#999" }}>&rarr; this</span></>
+                    : <>this <span style={{ color: "#999" }}>&rarr;</span> {otherName}</>
+                  }
+                </span>
+                <select
+                  style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginLeft: 8 }}
+                  value={e.type}
+                  onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
+                >
+                  {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <Button variant="ghost" size="icon-xs" className="ml-1 h-5 w-5 text-[#999] hover:text-[#B81917]" onClick={() => handleRemoveEdge(e.id)}>x</Button>
+              </div>
+            );
+          })}
+          {incomingEdges.length === 0 && outgoingEdges.length === 0 && (
+            <div style={{ fontSize: 11, color: "#BBB", marginBottom: 4 }}>No relations yet</div>
+          )}
           <div style={{ marginTop: 6 }}>
-            <select className="dp-input" style={{ fontSize: 10 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "incoming"); }}>
-              <option value="">+ Add dependency...</option>
-              {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="dp-field">
-          <Label className="dp-label">Blocks / feeds into (outgoing)</Label>
-          {outgoingEdges.map((e) => (
-            <div key={e.id} className="dp-dep">
-              <span style={{ flex: 1 }}>{nodeName(e.targetId)}</span>
-              <select
-                style={{ fontSize: 8, padding: "2px 4px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginRight: 4 }}
-                value={e.type}
-                onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
-              >
-                {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <Button variant="ghost" size="icon-xs" className="h-5 w-5 text-[#999] hover:text-[#B81917]" onClick={() => handleRemoveEdge(e.id)}>x</Button>
-            </div>
-          ))}
-          <div style={{ marginTop: 6 }}>
-            <select className="dp-input" style={{ fontSize: 10 }} value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "outgoing"); }}>
-              <option value="">+ Add outgoing...</option>
+            <select className="dp-input" value="" onChange={(e) => { if (e.target.value) handleAddEdge(e.target.value, "incoming"); }}>
+              <option value="">+ Add relation...</option>
               {availableNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
             </select>
           </div>

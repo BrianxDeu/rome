@@ -5,6 +5,7 @@ import type { Node, Edge } from "@rome/shared";
 import {
   STATUSES,
   PRIORITIES,
+  EDGE_TYPES,
   statusLabel,
   statusColor,
   priorityColor,
@@ -22,6 +23,7 @@ import { Label } from "../components/ui/label";
 
 const statuses = Object.keys(STATUSES);
 const priorities = Object.keys(PRIORITIES);
+const edgeTypes = Object.keys(EDGE_TYPES).filter((t) => t !== "parent_of");
 
 // Workstream colors
 const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
@@ -46,6 +48,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const addNode = useGraphStore((s) => s.addNode);
   const addEdge = useGraphStore((s) => s.addEdge);
   const removeEdge = useGraphStore((s) => s.removeEdge);
+  const selectNode = useGraphStore((s) => s.selectNode);
 
   const [boardExpanded, setBoardExpanded] = useState<string | null>(null);
   // Start with all node groups collapsed — use a sentinel to initialize once
@@ -516,7 +519,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
             </div>
           </div>
           {isExp && (
-            <div className="board-card-body" onClick={(e) => e.stopPropagation()}>
+            <div className="board-card-body" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
               <div className="dp-field">
                 <Label className="dp-label">Notes</Label>
                 <Textarea
@@ -550,18 +553,50 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                     {priorities.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
-                <div className="dp-field">
-                  <Label className="dp-label">Owner</Label>
-                  <Input className="font-[Tomorrow] text-[11px]" value={raciData.responsible}
-                    onChange={(e) => {
-                      const next = { ...raciData, responsible: e.target.value };
-                      handleFieldChange(n.id, "raci", JSON.stringify(next));
-                    }}
-                    onBlur={(e) => {
-                      const next = { ...raciData, responsible: e.target.value };
-                      handleFieldBlur(n.id, "raci", JSON.stringify(next));
-                    }}
-                  />
+                <div className="dp-field" style={{ gridColumn: "1 / -1" }}>
+                  <Label className="dp-label">RACI</Label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                    <div><Label className="dp-label" style={{ fontSize: 7 }}>R</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.responsible}
+                      onChange={(e) => {
+                        const next = { ...raciData, responsible: e.target.value };
+                        handleFieldChange(n.id, "raci", JSON.stringify(next));
+                      }}
+                      onBlur={(e) => {
+                        const next = { ...raciData, responsible: e.target.value };
+                        handleFieldBlur(n.id, "raci", JSON.stringify(next));
+                      }}
+                    /></div>
+                    <div><Label className="dp-label" style={{ fontSize: 7 }}>A</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.accountable}
+                      onChange={(e) => {
+                        const next = { ...raciData, accountable: e.target.value };
+                        handleFieldChange(n.id, "raci", JSON.stringify(next));
+                      }}
+                      onBlur={(e) => {
+                        const next = { ...raciData, accountable: e.target.value };
+                        handleFieldBlur(n.id, "raci", JSON.stringify(next));
+                      }}
+                    /></div>
+                    <div><Label className="dp-label" style={{ fontSize: 7 }}>C</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.consulted}
+                      onChange={(e) => {
+                        const next = { ...raciData, consulted: e.target.value };
+                        handleFieldChange(n.id, "raci", JSON.stringify(next));
+                      }}
+                      onBlur={(e) => {
+                        const next = { ...raciData, consulted: e.target.value };
+                        handleFieldBlur(n.id, "raci", JSON.stringify(next));
+                      }}
+                    /></div>
+                    <div><Label className="dp-label" style={{ fontSize: 7 }}>I</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.informed}
+                      onChange={(e) => {
+                        const next = { ...raciData, informed: e.target.value };
+                        handleFieldChange(n.id, "raci", JSON.stringify(next));
+                      }}
+                      onBlur={(e) => {
+                        const next = { ...raciData, informed: e.target.value };
+                        handleFieldBlur(n.id, "raci", JSON.stringify(next));
+                      }}
+                    /></div>
+                  </div>
                 </div>
                 <div className="dp-field">
                   <Label className="dp-label">Budget</Label>
@@ -592,78 +627,77 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                   />
                 </div>
               </div>
-              {/* Dependencies & Blockers */}
+              {/* Relations — unified incoming + outgoing */}
               {(() => {
-                const depTypes = new Set(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared"]);
-                const incoming = edges.filter((e) => e.targetId === n.id && depTypes.has(e.type));
-                const outgoing = edges.filter((e) => e.sourceId === n.id && depTypes.has(e.type));
-                // Only show leaf nodes as dependency targets (not workstream headers or cluster parents)
-                const candidateNodes = leafNodes.filter((nd) => nd.id !== n.id);
+                const allRelations = [
+                  ...edges.filter((e) => e.targetId === n.id && e.type !== "parent_of").map((e) => ({ ...e, direction: "incoming" as const })),
+                  ...edges.filter((e) => e.sourceId === n.id && e.type !== "parent_of").map((e) => ({ ...e, direction: "outgoing" as const })),
+                ];
+                const connectedIds = new Set([
+                  ...allRelations.map((e) => e.direction === "incoming" ? e.sourceId : e.targetId),
+                  n.id,
+                ]);
+                const candidateNodes = nodes.filter((nd) => !connectedIds.has(nd.id));
+
+                async function changeEdgeType(edgeId: string, newType: string) {
+                  try {
+                    await api(`/edges/${edgeId}`, { method: "PATCH", body: JSON.stringify({ type: newType }) });
+                    const edge = edges.find((e) => e.id === edgeId);
+                    if (edge) { removeEdge(edgeId); addEdge({ ...edge, type: newType }); }
+                  } catch (err) { console.error("[BoardView] change edge type:", err); }
+                }
+
                 return (
                   <div style={{ marginTop: 12 }}>
-                    <Label className="dp-label" style={{ marginBottom: 6 }}>Dependencies &amp; Blockers</Label>
-                    {incoming.map((e) => {
-                      const src = nodes.find((nd) => nd.id === e.sourceId);
-                      return (
-                        <div key={e.id} className="dp-dep">
-                          <span style={{ fontSize: 9 }}>{src?.name ?? "?"} <span style={{ color: e.type === "blocker" || e.type === "blocks" ? "#B81917" : "#f59e0b" }}>{e.type}</span> this</span>
-                          <button onClick={async () => {
-                            try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
-                          }}>&times;</button>
-                        </div>
-                      );
-                    })}
-                    {outgoing.map((e) => {
-                      const tgt = nodes.find((nd) => nd.id === e.targetId);
-                      return (
-                        <div key={e.id} className="dp-dep">
-                          <span style={{ fontSize: 9 }}>this <span style={{ color: e.type === "blocker" || e.type === "blocks" ? "#B81917" : "#3B82F6" }}>{e.type}</span> {tgt?.name ?? "?"}</span>
-                          <button onClick={async () => {
-                            try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
-                          }}>&times;</button>
-                        </div>
-                      );
-                    })}
-                    {incoming.length === 0 && outgoing.length === 0 && (
-                      <div style={{ fontSize: 9, color: "#BBB", marginBottom: 4 }}>No dependencies yet</div>
-                    )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
-                        const targetId = ev.target.value;
-                        if (!targetId) return;
-                        try {
-                          const edge = await api<Edge>("/edges", {
-                            method: "POST",
-                            body: JSON.stringify({ source_id: targetId, target_id: n.id, type: "depends_on" }),
-                          });
-                          addEdge(edge);
-                          const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
-                          setNodes(graph.nodes);
-                          setEdges(graph.edges);
-                        } catch (err) { console.error("[BoardView] add dep:", err); }
-                        ev.target.value = "";
-                      }}>
-                        <option value="">+ Add dependency...</option>
-                        {candidateNodes.map((nd) => <option key={`d-${nd.id}`} value={nd.id}>{nd.name}</option>)}
-                      </select>
-                      <select className="dp-input" style={{ fontSize: 9 }} value="" onChange={async (ev) => {
-                        const targetId = ev.target.value;
-                        if (!targetId) return;
-                        try {
-                          const edge = await api<Edge>("/edges", {
-                            method: "POST",
-                            body: JSON.stringify({ source_id: n.id, target_id: targetId, type: "blocker" }),
-                          });
-                          addEdge(edge);
-                          const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
-                          setNodes(graph.nodes);
-                          setEdges(graph.edges);
-                        } catch (err) { console.error("[BoardView] add blocker:", err); }
-                        ev.target.value = "";
-                      }}>
-                        <option value="">+ Add blocker (outgoing)...</option>
-                        {candidateNodes.map((nd) => <option key={`b-${nd.id}`} value={nd.id}>{nd.name}</option>)}
-                      </select>
+                    <div className="dp-field">
+                      <Label className="dp-label">Relations</Label>
+                      {allRelations.map((e) => {
+                        const otherNode = nodes.find((nd) => nd.id === (e.direction === "incoming" ? e.sourceId : e.targetId));
+                        return (
+                          <div key={e.id} className="dp-dep" style={{ fontSize: 11, padding: "8px 10px" }}>
+                            <span style={{ flex: 1 }}>
+                              {e.direction === "incoming"
+                                ? <>{otherNode?.name ?? "?"} <span style={{ color: "#999" }}>&rarr; this</span></>
+                                : <>this <span style={{ color: "#999" }}>&rarr;</span> {otherNode?.name ?? "?"}</>
+                              }
+                            </span>
+                            <select
+                              style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginLeft: 8 }}
+                              value={e.type}
+                              onChange={(ev) => changeEdgeType(e.id, ev.target.value)}
+                            >
+                              {edgeTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <button style={{ marginLeft: 6 }} onClick={async () => {
+                              try { await api(`/edges/${e.id}`, { method: "DELETE" }); removeEdge(e.id); } catch (err) { console.error("[BoardView] remove edge:", err); }
+                            }}>&times;</button>
+                          </div>
+                        );
+                      })}
+                      {allRelations.length === 0 && (
+                        <div style={{ fontSize: 11, color: "#BBB", marginBottom: 4 }}>No relations yet</div>
+                      )}
+                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                        <select className="dp-input" style={{ flex: 1 }} value="" onChange={async (ev) => {
+                          const targetId = ev.target.value;
+                          if (!targetId) return;
+                          // Default to "depends_on" — user can change the type after adding
+                          try {
+                            const edge = await api<Edge>("/edges", {
+                              method: "POST",
+                              body: JSON.stringify({ source_id: targetId, target_id: n.id, type: "depends_on" }),
+                            });
+                            addEdge(edge);
+                            const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+                            setNodes(graph.nodes);
+                            setEdges(graph.edges);
+                          } catch (err) { console.error("[BoardView] add relation:", err); }
+                          ev.target.value = "";
+                        }}>
+                          <option value="">+ Add relation...</option>
+                          {candidateNodes.map((nd) => <option key={nd.id} value={nd.id}>{nd.name}</option>)}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 );
@@ -832,7 +866,18 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       <div className="board-subgroup-count">{children.length}</div>
                       <button
                         className="btn"
-                        style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
+                        style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#666" }}
+                        title="Edit node group details"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectNode(cluster);
+                        }}
+                      >
+                        &#9998;
+                      </button>
+                      <button
+                        className="btn"
+                        style={{ fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
                         title="Delete node group"
                         onClick={async (e) => {
                           e.stopPropagation();

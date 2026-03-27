@@ -68,7 +68,7 @@ export function Shell() {
         ) : (
           <GraphView />
         )}
-        {(activeView === "graph" || activeView === "gantt") && selectedNode && <NodePanel />}
+        {(activeView === "graph" || activeView === "gantt" || activeView === "board") && selectedNode && <NodePanel />}
       </div>
 
       {addNodeModal.open && (
