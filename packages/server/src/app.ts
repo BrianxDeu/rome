@@ -144,13 +144,20 @@ export function createApp(db: Db) {
     res.json({
       access_token: authToken,
       token_type: "Bearer",
-      expires_in: 86400,
+      expires_in: 604800,
     });
   });
 
   // MCP endpoint — mounted BEFORE static middleware so /mcp isn't caught by SPA catch-all
   const mcpHandler = createMcpHandler(db);
-  app.all(["/mcp", "/mcp/*"], mcpHandler);
+  app.all(["/mcp", "/mcp/*"], (req, res, next) => {
+    Promise.resolve(mcpHandler(req, res, next)).catch((err) => {
+      console.error("[MCP] Unhandled error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "MCP handler error" });
+      }
+    });
+  });
 
   // Serve static client assets in production
   const clientDist = process.env["CLIENT_DIST"] || path.resolve(__dirname, "../../client/dist");

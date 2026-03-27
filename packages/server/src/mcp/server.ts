@@ -60,6 +60,7 @@ function createMcpServer(db: Db): McpServer {
           content: [textContent(JSON.stringify(graph, null, 2))],
         };
       } catch (err) {
+        console.error("[MCP] tool error:", err);
         return {
           content: [
             textContent(JSON.stringify({ error: "db_unavailable", details: String(err) })),
@@ -203,6 +204,7 @@ function createMcpServer(db: Db): McpServer {
           ],
         };
       } catch (err) {
+        console.error("[MCP] tool error:", err);
         return {
           content: [
             textContent(JSON.stringify({ error: "create_failed", details: String(err) })),
@@ -308,6 +310,7 @@ function createMcpServer(db: Db): McpServer {
           ],
         };
       } catch (err) {
+        console.error("[MCP] tool error:", err);
         return {
           content: [
             {
@@ -339,6 +342,7 @@ function createMcpServer(db: Db): McpServer {
           content: [textContent(markdown)],
         };
       } catch (err) {
+        console.error("[MCP] tool error:", err);
         return {
           content: [
             textContent(JSON.stringify({ error: "db_unavailable", details: String(err) })),
@@ -358,6 +362,8 @@ function createMcpServer(db: Db): McpServer {
 
 export function createMcpHandler(db: Db): RequestHandler {
   const handler: RequestHandler = async (req: Request, res: Response) => {
+    console.log(`[MCP] ${req.method} ${req.url}`);
+
     // --- Auth check ---
     const authToken = process.env.MCP_AUTH_TOKEN;
     if (!authToken) {
@@ -408,6 +414,7 @@ export function createMcpHandler(db: Db): RequestHandler {
         req.body,
       );
     } catch (err) {
+      console.error("[MCP] Handler error:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: "MCP transport error" });
       }
