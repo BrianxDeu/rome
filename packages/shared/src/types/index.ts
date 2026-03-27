@@ -63,3 +63,13 @@ export interface AuthResponse {
   token: string;
   user: PublicUser;
 }
+
+export interface PersonalTask {
+  id: string;
+  userId: string;
+  text: string;
+  priority: string;
+  done: number;
+  doneAt: string | null;
+  createdAt: string;
+}

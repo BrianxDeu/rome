@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 
-export type ViewTab = "board" | "graph" | "gantt" | "budget";
+export type ViewTab = "tasks" | "board" | "graph" | "gantt" | "budget";
 
 interface TopBarProps {
   activeView: ViewTab;
@@ -11,7 +11,7 @@ interface TopBarProps {
   onAddWorkstream?: () => void;
 }
 
-const tabs: ViewTab[] = ["board", "graph", "gantt", "budget"];
+const tabs: ViewTab[] = ["tasks", "board", "graph", "gantt", "budget"];
 
 export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, onAddWorkstream }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
@@ -60,9 +60,9 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, on
         ))}
       </div>
       <div className="top-actions">
-        {onAddNode && <button className="btn" onClick={onAddNode}>+ NODE</button>}
-        {onAddNodeGroup && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
-        {onAddWorkstream && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
+        {onAddNode && activeView !== "tasks" && <button className="btn" onClick={onAddNode}>+ NODE</button>}
+        {onAddNodeGroup && activeView !== "tasks" && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
+        {onAddWorkstream && activeView !== "tasks" && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
         <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
         {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}
         <button className="btn" onClick={logout}>LOGOUT</button>

@@ -7,6 +7,7 @@ import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
 import { GraphView } from "./pages/GraphView";
+import { TasksView } from "./pages/TasksView";
 import { NodePanel } from "./components/NodePanel";
 import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
@@ -19,7 +20,7 @@ interface AddNodeModalState {
 }
 
 export function Shell() {
-  const [activeView, setActiveView] = useState<ViewTab>("board");
+  const [activeView, setActiveView] = useState<ViewTab>("tasks");
   const [addNodeModal, setAddNodeModal] = useState<AddNodeModalState>({ open: false });
   const [addNodeGroupModal, setAddNodeGroupModal] = useState(false);
   const [addWorkstreamModal, setAddWorkstreamModal] = useState(false);
@@ -56,7 +57,9 @@ export function Shell() {
         onAddWorkstream={() => setAddWorkstreamModal(true)}
       />
       <div className="main">
-        {activeView === "board" ? (
+        {activeView === "tasks" ? (
+          <TasksView />
+        ) : activeView === "board" ? (
           <BoardView onNavigateToNode={handleNavigateToNode} onAddNode={handleOpenAddNode} />
         ) : activeView === "gantt" ? (
           <GanttView />

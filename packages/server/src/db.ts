@@ -55,5 +55,16 @@ export function initTables(sqlite: BetterSqlite3.Database) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS personal_tasks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      text TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'P1',
+      done INTEGER NOT NULL DEFAULT 0,
+      done_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_personal_tasks_user ON personal_tasks(user_id);
   `);
 }

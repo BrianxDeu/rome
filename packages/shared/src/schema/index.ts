@@ -48,3 +48,13 @@ export const edges = sqliteTable("edges", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const personalTasks = sqliteTable("personal_tasks", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  text: text("text").notNull(),
+  priority: text("priority").notNull().default("P1"),
+  done: integer("done").notNull().default(0),
+  doneAt: text("done_at"),
+  createdAt: text("created_at").notNull(),
+});

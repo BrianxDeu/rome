@@ -10,7 +10,10 @@ export type RomeEvent =
   | { type: "node:deleted"; payload: { id: string } }
   | { type: "edge:created"; payload: Record<string, unknown> }
   | { type: "edge:updated"; payload: Record<string, unknown> }
-  | { type: "edge:deleted"; payload: { id: string } };
+  | { type: "edge:deleted"; payload: { id: string } }
+  | { type: "task:created"; payload: Record<string, unknown> }
+  | { type: "task:updated"; payload: Record<string, unknown> }
+  | { type: "task:deleted"; payload: { id: string } };
 
 let io: SocketServer | null = null;
 
@@ -36,6 +39,7 @@ export function setupSocket(httpServer: HttpServer): SocketServer {
 
   io.on("connection", (socket) => {
     socket.join("graph");
+    socket.join("user:" + socket.data.auth.userId);
   });
 
   return io;
@@ -44,6 +48,11 @@ export function setupSocket(httpServer: HttpServer): SocketServer {
 export function broadcast(event: RomeEvent): void {
   if (!io) return;
   io.to("graph").emit(event.type, event.payload);
+}
+
+export function broadcastToUser(userId: string, event: RomeEvent): void {
+  if (!io) return;
+  io.to("user:" + userId).emit(event.type, event.payload);
 }
 
 export function getIo(): SocketServer | null {
