@@ -156,18 +156,32 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   async function renameWorkstream(oldName: string, newName: string) {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === oldName) return;
-    // Update workstream field on ALL nodes with this workstream
+    // Find the workstream header node (top-level, no workstream field, name matches)
+    const wsHeader = nodes.find((n) => n.name === oldName && !parentMap.has(n.id) && !n.workstream);
+    // Optimistically update the header node name
+    if (wsHeader) {
+      updateNode(wsHeader.id, { name: trimmed });
+    }
+    // Optimistically update workstream field on ALL child nodes
     const affected = nodes.filter((n) => n.workstream === oldName);
     for (const n of affected) {
       updateNode(n.id, { workstream: trimmed });
     }
-    // Persist to DB
+    // Persist to DB — renaming the header node cascades workstream fields server-side
     try {
-      for (const n of affected) {
-        await api(`/nodes/${n.id}`, {
+      if (wsHeader) {
+        await api(`/nodes/${wsHeader.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ workstream: trimmed }),
+          body: JSON.stringify({ name: trimmed }),
         });
+      } else {
+        // No header node found — update workstream fields individually
+        for (const n of affected) {
+          await api(`/nodes/${n.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ workstream: trimmed }),
+          });
+        }
       }
       // Refetch for consistency
       const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
@@ -756,6 +770,42 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 onDoubleClick={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).focus(); }}
               >{ws}</div>
               <div className="board-group-count">{allGroupNodes.length} items</div>
+              {wsHeader && (
+                <button
+                  className="btn"
+                  style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
+                  title="Delete workstream"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete workstream '${ws}' and all its tasks? This cannot be undone.`)) return;
+                    try {
+                      // Delete leaf nodes under each node group first
+                      for (const cluster of clusters) {
+                        const clChildren = allGroupNodes.filter((n) => parentMap.get(n.id) === cluster.id);
+                        for (const child of clChildren) {
+                          await api(`/nodes/${child.id}`, { method: "DELETE" });
+                        }
+                        // Then delete the node group itself
+                        await api(`/nodes/${cluster.id}`, { method: "DELETE" });
+                      }
+                      // Delete ungrouped leaf nodes
+                      for (const child of ungrouped) {
+                        await api(`/nodes/${child.id}`, { method: "DELETE" });
+                      }
+                      // Finally delete the workstream header node
+                      await api(`/nodes/${wsHeader.id}`, { method: "DELETE" });
+                      // Refetch graph to update store
+                      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+                      setNodes(graph.nodes);
+                      setEdges(graph.edges);
+                    } catch (err) {
+                      console.error("Delete workstream failed:", err);
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
             <div className="board-cards">
               {clusters.map((cluster) => {

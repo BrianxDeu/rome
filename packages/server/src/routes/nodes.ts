@@ -175,10 +175,36 @@ export function nodeRoutes(db: Db): Router {
     if (data.position_pinned !== undefined) changes.positionPinned = data.position_pinned ? 1 : 0;
     if (data.attachments !== undefined) changes.attachments = data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null;
 
+    // Cascade: if this is a workstream header being renamed, update children's workstream field
+    const cascadedNodes: Array<Record<string, unknown>> = [];
+    if (data.name !== undefined && data.name !== existing.name && !existing.workstream) {
+      // This node has no workstream field — it may be a workstream header.
+      // Update all nodes whose workstream matches the old name to use the new name.
+      const oldName = existing.name;
+      const newName = data.name;
+      const affectedNodes = db.select().from(nodes).where(eq(nodes.workstream, oldName)).all();
+      if (affectedNodes.length > 0) {
+        db.update(nodes)
+          .set({ workstream: newName, updatedAt: new Date().toISOString() })
+          .where(eq(nodes.workstream, oldName))
+          .run();
+        // Broadcast updates for all cascaded nodes
+        for (const affected of affectedNodes) {
+          const refreshed = db.select().from(nodes).where(eq(nodes.id, affected.id)).get();
+          if (refreshed) {
+            cascadedNodes.push(refreshed as unknown as Record<string, unknown>);
+          }
+        }
+      }
+    }
+
     db.update(nodes).set(changes).where(eq(nodes.id, req.params.id!)).run();
     const updated = db.select().from(nodes).where(eq(nodes.id, req.params.id!)).get();
 
     broadcast({ type: "node:updated", payload: updated as unknown as Record<string, unknown> });
+    for (const cascaded of cascadedNodes) {
+      broadcast({ type: "node:updated", payload: cascaded });
+    }
     res.json(updated);
   });
 
