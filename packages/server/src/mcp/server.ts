@@ -215,12 +215,13 @@ function createMcpServer(db: Db): McpServer {
     },
   );
 
-  // ---- Tool 3: rome_update_task ----------------------------------------------
+  // ---- Tool 3: rome_update_node ----------------------------------------------
   mcp.tool(
-    "rome_update_task",
-    "Updates fields on an existing task. Accepts the task by name or ID.",
+    "rome_update_node",
+    "Updates fields on any node (task, node group, or workstream). Accepts the node by name or ID. Can rename, change status, priority, dates, budget, RACI, workstream, notes, and deliverables.",
     {
       id_or_name: z.string(),
+      name: z.string().optional(),
       status: z
         .enum(["not_started", "in_progress", "blocked", "done", "cancelled"])
         .optional(),
@@ -228,6 +229,9 @@ function createMcpServer(db: Db): McpServer {
       start_date: z.string().optional(),
       end_date: z.string().optional(),
       budget: z.number().optional(),
+      workstream: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+      deliverable: z.string().nullable().optional(),
       raci: z
         .object({
           responsible: z.union([z.string(), z.array(z.string())]).optional(),
@@ -239,88 +243,187 @@ function createMcpServer(db: Db): McpServer {
     },
     async (args) => {
       try {
-        // 1. Resolve node
         const result = resolveNodeByName(db, args.id_or_name);
 
         if (result.status === "no_match") {
           return {
-            content: [
-              textContent(JSON.stringify({ error: "no_match", query: args.id_or_name })),
-            ],
+            content: [textContent(JSON.stringify({ error: "no_match", query: args.id_or_name }))],
             isError: true,
           };
         }
 
         if (result.status === "ambiguous") {
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  status: "ambiguous",
-                  candidates: result.candidates,
-                }),
-              },
-            ],
+            content: [textContent(JSON.stringify({ status: "ambiguous", candidates: result.candidates }))],
             isError: true,
           };
         }
 
-        if (result.status === "not_a_task") {
-          return {
-            content: [
-              textContent(JSON.stringify({ error: "not_a_task", id: result.node.id })),
-            ],
-            isError: true,
-          };
-        }
-
-        // result.status === "found"
+        // Accept both "found" and "not_a_task" — we can edit any node
         const nodeId = result.node.id;
 
-        // 2. Build patch
         const patch: Record<string, unknown> = {};
+        if (args.name !== undefined) patch.name = args.name;
         if (args.status !== undefined) patch.status = args.status;
         if (args.priority !== undefined) patch.priority = args.priority;
         if (args.start_date !== undefined) patch.start_date = args.start_date;
         if (args.end_date !== undefined) patch.end_date = args.end_date;
         if (args.budget !== undefined) patch.budget = args.budget;
+        if (args.workstream !== undefined) patch.workstream = args.workstream;
+        if (args.notes !== undefined) patch.notes = args.notes;
+        if (args.deliverable !== undefined) patch.deliverable = args.deliverable;
         if (args.raci !== undefined) patch.raci = args.raci;
 
-        // 3. Update
         const updated = updateNode(db, nodeId, patch, MCP_SERVICE_USER_ID);
         if (!updated) {
           return {
-            content: [
-              textContent(JSON.stringify({ error: "update_failed", details: "Node not found during update" })),
-            ],
+            content: [textContent(JSON.stringify({ error: "update_failed", details: "Node not found during update" }))],
             isError: true,
           };
         }
 
-        // 4. Broadcast
-        broadcast({
-          type: "node:updated",
-          payload: updated as unknown as Record<string, unknown>,
-        });
+        broadcast({ type: "node:updated", payload: updated as unknown as Record<string, unknown> });
+        return { content: [textContent(JSON.stringify(updated, null, 2))] };
+      } catch (err) {
+        console.error("[MCP] tool error:", err);
+        return {
+          content: [textContent(JSON.stringify({ error: "update_failed", details: String(err) }))],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---- Tool 5: rome_create_node_group ----------------------------------------
+  mcp.tool(
+    "rome_create_node_group",
+    "Creates a new node group under a workstream. The node group becomes a collapsible container in the graph view. Automatically creates parent_of and produces edges to link it to the workstream.",
+    {
+      name: z.string(),
+      workstream: z.string().describe("Name of the parent workstream"),
+      priority: z.enum(["P0", "P1", "P2", "P3"]).optional(),
+    },
+    async (args) => {
+      try {
+        // Resolve workstream header
+        const wsResult = resolveNodeByName(db, args.workstream);
+        if (wsResult.status === "no_match") {
+          return {
+            content: [textContent(JSON.stringify({ error: "workstream_not_found", query: args.workstream }))],
+            isError: true,
+          };
+        }
+        if (wsResult.status === "ambiguous") {
+          return {
+            content: [textContent(JSON.stringify({ error: "workstream_ambiguous", query: args.workstream, candidates: wsResult.candidates }))],
+            isError: true,
+          };
+        }
+        const wsHeader = wsResult.node;
+        const workstreamValue = wsHeader.workstream ?? wsHeader.name;
+
+        // Create node group
+        const node = createNode(
+          db,
+          {
+            name: args.name,
+            workstream: workstreamValue,
+            priority: args.priority ?? "P1",
+            status: "not_started",
+          },
+          MCP_SERVICE_USER_ID,
+        );
+        broadcast({ type: "node:created", payload: node as unknown as Record<string, unknown> });
+
+        // parent_of: workstream → node group
+        const parentEdge = createEdge(db, { source_id: wsHeader.id, target_id: node.id, type: "parent_of" }, MCP_SERVICE_USER_ID);
+        if (!("error" in parentEdge)) {
+          broadcast({ type: "edge:created", payload: parentEdge as unknown as Record<string, unknown> });
+        }
+
+        // produces: node group → workstream (feeds into)
+        const producesEdge = createEdge(db, { source_id: node.id, target_id: wsHeader.id, type: "produces" }, MCP_SERVICE_USER_ID);
+        if (!("error" in producesEdge)) {
+          broadcast({ type: "edge:created", payload: producesEdge as unknown as Record<string, unknown> });
+        }
 
         return {
-          content: [
-            textContent(JSON.stringify(updated, null, 2)),
-          ],
+          content: [textContent(JSON.stringify({ node, parent_edge: parentEdge, produces_edge: producesEdge }, null, 2))],
         };
       } catch (err) {
         console.error("[MCP] tool error:", err);
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                error: "update_failed",
-                details: String(err),
-              }),
-            },
-          ],
+          content: [textContent(JSON.stringify({ error: "create_failed", details: String(err) }))],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---- Tool 6: rome_create_edge ----------------------------------------------
+  mcp.tool(
+    "rome_create_edge",
+    "Creates a relationship (edge) between two nodes. Use this for dependency management: 'produces' (A feeds into B), 'blocks' (A blocks B), 'depends_on' (A depends on B), 'sequence' (A must happen before B). Accepts node names or IDs.",
+    {
+      source: z.string().describe("Name or ID of the source node"),
+      target: z.string().describe("Name or ID of the target node"),
+      type: z.enum(["produces", "blocks", "blocker", "depends_on", "sequence", "feeds", "shared"]),
+    },
+    async (args) => {
+      try {
+        // Resolve source
+        const srcResult = resolveNodeByName(db, args.source);
+        if (srcResult.status === "no_match") {
+          return {
+            content: [textContent(JSON.stringify({ error: "source_not_found", query: args.source }))],
+            isError: true,
+          };
+        }
+        if (srcResult.status === "ambiguous") {
+          return {
+            content: [textContent(JSON.stringify({ error: "source_ambiguous", query: args.source, candidates: srcResult.candidates }))],
+            isError: true,
+          };
+        }
+
+        // Resolve target
+        const tgtResult = resolveNodeByName(db, args.target);
+        if (tgtResult.status === "no_match") {
+          return {
+            content: [textContent(JSON.stringify({ error: "target_not_found", query: args.target }))],
+            isError: true,
+          };
+        }
+        if (tgtResult.status === "ambiguous") {
+          return {
+            content: [textContent(JSON.stringify({ error: "target_ambiguous", query: args.target, candidates: tgtResult.candidates }))],
+            isError: true,
+          };
+        }
+
+        const sourceId = srcResult.node.id;
+        const targetId = tgtResult.node.id;
+
+        const edge = createEdge(db, { source_id: sourceId, target_id: targetId, type: args.type }, MCP_SERVICE_USER_ID);
+        if ("error" in edge) {
+          return {
+            content: [textContent(JSON.stringify(edge))],
+            isError: true,
+          };
+        }
+
+        broadcast({ type: "edge:created", payload: edge as unknown as Record<string, unknown> });
+        return {
+          content: [textContent(JSON.stringify({
+            edge,
+            source: { id: srcResult.node.id, name: srcResult.node.name },
+            target: { id: tgtResult.node.id, name: tgtResult.node.name },
+          }, null, 2))],
+        };
+      } catch (err) {
+        console.error("[MCP] tool error:", err);
+        return {
+          content: [textContent(JSON.stringify({ error: "create_edge_failed", details: String(err) }))],
           isError: true,
         };
       }
