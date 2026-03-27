@@ -181,7 +181,7 @@ export function GraphView() {
     return () => svg.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Node drag
+  // Node drag — also tracks descendant start positions for group dragging
   const dragState = useRef<{
     id: string;
     startMX: number;
@@ -191,6 +191,7 @@ export function GraphView() {
     lastX: number;
     lastY: number;
     moved: boolean;
+    descendantStarts: Map<string, { x: number; y: number }>;
   } | null>(null);
 
   // Get all descendants of a node (recursive via parent_of edges)
@@ -213,6 +214,14 @@ export function GraphView() {
     const pos = posMap.get(nodeId);
     if (!pos) return;
 
+    // Capture start positions of all descendants for group dragging
+    const descendants = getAllDescendants(nodeId);
+    const descendantStarts = new Map<string, { x: number; y: number }>();
+    for (const descId of descendants) {
+      const dp = posMap.get(descId);
+      if (dp) descendantStarts.set(descId, { x: dp.x, y: dp.y });
+    }
+
     dragState.current = {
       id: nodeId,
       startMX: e.clientX,
@@ -222,6 +231,7 @@ export function GraphView() {
       lastX: pos.x,
       lastY: pos.y,
       moved: false,
+      descendantStarts,
     };
 
     const onMove = (me: MouseEvent) => {
@@ -234,22 +244,19 @@ export function GraphView() {
         const v = vpRef.current;
         const newX = ds.startNX + dx / v.z;
         const newY = ds.startNY + dy / v.z;
-        const deltaX = newX - ds.lastX;
-        const deltaY = newY - ds.lastY;
+        // Total delta from drag start
+        const totalDX = newX - ds.startNX;
+        const totalDY = newY - ds.startNY;
         ds.lastX = newX;
         ds.lastY = newY;
         onDragMove(ds.id, newX, newY);
         updateNode(ds.id, { x: newX, y: newY });
-        // Move all hidden descendants with the parent
-        const descendants = getAllDescendants(ds.id);
-        for (const descId of descendants) {
-          const descPos = posMap.get(descId);
-          if (descPos) {
-            const nx = descPos.x + deltaX;
-            const ny = descPos.y + deltaY;
-            onDragMove(descId, nx, ny);
-            updateNode(descId, { x: nx, y: ny });
-          }
+        // Move all descendants using their start positions + total delta
+        for (const [descId, startPos] of ds.descendantStarts) {
+          const nx = startPos.x + totalDX;
+          const ny = startPos.y + totalDY;
+          onDragMove(descId, nx, ny);
+          updateNode(descId, { x: nx, y: ny });
         }
       }
     };
@@ -276,13 +283,15 @@ export function GraphView() {
             body: JSON.stringify({ x: Math.round(lastX * 10) / 10, y: Math.round(lastY * 10) / 10, position_pinned: true }),
           }).catch((err) => console.error("Failed to save position:", err));
           // Save all descendant positions too
-          const descendants = getAllDescendants(ds.id);
-          for (const descId of descendants) {
-            const descPos = posMap.get(descId);
-            if (descPos && Number.isFinite(descPos.x) && Number.isFinite(descPos.y)) {
+          const totalDX = lastX - ds.startNX;
+          const totalDY = lastY - ds.startNY;
+          for (const [descId, startPos] of ds.descendantStarts) {
+            const fx = Math.round((startPos.x + totalDX) * 10) / 10;
+            const fy = Math.round((startPos.y + totalDY) * 10) / 10;
+            if (Number.isFinite(fx) && Number.isFinite(fy)) {
               api(`/nodes/${descId}`, {
                 method: "PATCH",
-                body: JSON.stringify({ x: Math.round(descPos.x * 10) / 10, y: Math.round(descPos.y * 10) / 10, position_pinned: true }),
+                body: JSON.stringify({ x: fx, y: fy, position_pinned: true }),
               }).catch(() => {});
             }
           }
