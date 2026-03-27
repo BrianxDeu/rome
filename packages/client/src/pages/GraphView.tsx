@@ -214,12 +214,14 @@ export function GraphView() {
     const pos = posMap.get(nodeId);
     if (!pos) return;
 
-    // Capture start positions of all descendants for group dragging
-    const descendants = getAllDescendants(nodeId);
+    // Only move descendants together when the node is COLLAPSED (children hidden)
+    const isCollapsed = !expandedClusters.has(nodeId);
     const descendantStarts = new Map<string, { x: number; y: number }>();
-    for (const descId of descendants) {
-      const dp = posMap.get(descId);
-      if (dp) descendantStarts.set(descId, { x: dp.x, y: dp.y });
+    if (isCollapsed) {
+      for (const descId of getAllDescendants(nodeId)) {
+        const dp = posMap.get(descId);
+        if (dp) descendantStarts.set(descId, { x: dp.x, y: dp.y });
+      }
     }
 
     dragState.current = {
