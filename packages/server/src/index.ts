@@ -27,17 +27,13 @@ function cleanupStaleTasks() {
 cleanupStaleTasks();
 setInterval(cleanupStaleTasks, 5 * 60 * 1000);
 
-// Graceful shutdown — let in-flight requests finish before dying
+// Graceful shutdown — stop accepting new connections, let in-flight requests drain
+// Don't call process.exit() — let Railway manage the process lifecycle
 process.on("SIGTERM", () => {
-  console.log("[shutdown] SIGTERM received, closing server...");
+  console.log("[shutdown] SIGTERM received, draining connections...");
   httpServer.close(() => {
-    console.log("[shutdown] Server closed gracefully");
-    process.exit(0);
+    console.log("[shutdown] All connections drained");
   });
-  setTimeout(() => {
-    console.error("[shutdown] Forced exit after 10s timeout");
-    process.exit(1);
-  }, 10_000);
 });
 
 httpServer.listen(PORT, () => {
