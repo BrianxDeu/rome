@@ -112,17 +112,25 @@ export function GraphView() {
     fitToViewport();
   }, [posMap, fitToViewport]);
 
-  // Dependency edges — reroute hidden children to their cluster parent
+  // Dependency edges — reroute hidden children to their nearest visible ancestor
   const graphEdges = useMemo(() => {
+    // Walk up parent chain until we find a visible node
+    function resolveVisible(id: string): string {
+      let current = id;
+      while (hiddenNodeIds.has(current)) {
+        const parent = parentMap.get(current);
+        if (!parent) break;
+        current = parent;
+      }
+      return current;
+    }
+
     const seen = new Set<string>();
     const result: Array<{ edgeId: string; type: string; fromId: string; toId: string }> = [];
     for (const e of storeEdges) {
       if (e.type === "parent_of") continue;
-      let fromId = e.sourceId;
-      let toId = e.targetId;
-      // Reroute hidden nodes to their cluster parent
-      if (hiddenNodeIds.has(fromId)) fromId = parentMap.get(fromId) ?? fromId;
-      if (hiddenNodeIds.has(toId)) toId = parentMap.get(toId) ?? toId;
+      const fromId = resolveVisible(e.sourceId);
+      const toId = resolveVisible(e.targetId);
       if (fromId === toId) continue;
       const key = `${fromId}>${toId}`;
       if (seen.has(key)) continue;
@@ -417,7 +425,7 @@ export function GraphView() {
         <g style={{ transform: `translate(${vp.x}px,${vp.y}px) scale(${vp.z})`, transformOrigin: "0 0" }}>
 
           {/* Expanded cluster boundaries (dotted ellipses) */}
-          {[...expandedClusters].map((clusterId) => {
+          {[...expandedClusters].filter((cid) => !hiddenNodeIds.has(cid)).map((clusterId) => {
             const bounds = clusterBounds(clusterId);
             if (!bounds) return null;
             const cluster = storeNodes.find((n) => n.id === clusterId);
@@ -508,7 +516,7 @@ export function GraphView() {
 
           {/* Structural nodes (cluster parents + workstream headers) */}
           {storeNodes
-            .filter((n) => isStructuralNode(n) && !isGoalNode(n))
+            .filter((n) => isStructuralNode(n) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
             .map((cluster) => {
               const pos = posMap.get(cluster.id);
               if (!pos) return null;

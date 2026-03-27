@@ -56,6 +56,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const [boardOrder, setBoardOrder] = useState<Record<string, string[]>>({});
   const [boardAddGroup, setBoardAddGroup] = useState<string | null>(null);
   const [boardAddLabel, setBoardAddLabel] = useState("");
+  const [collapsedWorkstreams, setCollapsedWorkstreams] = useState<Set<string> | null>(null);
   const boardDrag = useRef<{ id: string; section: string; clusterId?: string } | null>(null);
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
@@ -75,6 +76,13 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     }
     return Array.from(ws).sort();
   }, [nodes, parentMap]);
+
+  // Initialize collapsed workstreams: all except the first one
+  useEffect(() => {
+    if (collapsedWorkstreams === null && workstreams.length > 0) {
+      setCollapsedWorkstreams(new Set(workstreams.slice(1)));
+    }
+  }, [workstreams, collapsedWorkstreams]);
 
   // A workstream header: no parent, no workstream field, has children (or was just created via +STREAM)
   // We check children OR the node's name appears in the workstream field of other nodes
@@ -523,7 +531,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               <div className="dp-field">
                 <Label className="dp-label">Notes</Label>
                 <Textarea
-                  className="font-[Tomorrow] text-[10px]"
+                  className="font-[Tomorrow] text-[13px]"
                   value={n.notes ?? ""}
                   placeholder="Freeform notes, links, context..."
                   onChange={(e) => handleFieldChange(n.id, "notes", e.target.value)}
@@ -533,7 +541,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               <div className="dp-field" style={{ marginTop: 8 }}>
                 <Label className="dp-label">Deliverables</Label>
                 <Textarea
-                  className="font-[Tomorrow] text-[10px]"
+                  className="font-[Tomorrow] text-[13px]"
                   value={n.deliverable ?? ""}
                   placeholder="What does done look like?"
                   onChange={(e) => handleFieldChange(n.id, "deliverable", e.target.value)}
@@ -789,9 +797,11 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         const ungrouped = allGroupNodes.filter((n) => !parentMap.has(n.id));
         const ungroupedKey = ws + "/_ungrouped";
 
+        const isWsCollapsed = collapsedWorkstreams?.has(ws) ?? false;
         return (
           <div key={ws} className="board-group">
-            <div className="board-group-header">
+            <div className="board-group-header" style={{ cursor: "pointer" }} onClick={() => setCollapsedWorkstreams((prev) => { const n = new Set(prev); if (n.has(ws)) n.delete(ws); else n.add(ws); return n; })}>
+              <div style={{ fontSize: 10, color: "#999", flexShrink: 0, width: 12, textAlign: "center" }}>{isWsCollapsed ? "\u25B6" : "\u25BC"}</div>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: color, flexShrink: 0 }} />
               <div
                 className="board-group-label"
@@ -799,6 +809,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 contentEditable
                 suppressContentEditableWarning
                 spellCheck={false}
+                onClick={(e) => e.stopPropagation()}
                 onBlur={(e) => handleEditableBlur(e, (newName) => renameWorkstream(ws, newName), ws)}
                 onKeyDown={handleEditableKeyDown}
                 onDoubleClick={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).focus(); }}
@@ -841,7 +852,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 </button>
               )}
             </div>
-            <div className="board-cards">
+            {!isWsCollapsed && <div className="board-cards">
               {clusters.map((cluster) => {
                 const children = allGroupNodes.filter((n) => parentMap.get(n.id) === cluster.id);
                 const subKey = ws + "/" + cluster.id;
@@ -946,7 +957,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 </div>
               )}
               {renderAddRow(ws, undefined, true)}
-            </div>
+            </div>}
           </div>
         );
       })}

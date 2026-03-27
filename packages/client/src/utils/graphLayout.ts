@@ -60,7 +60,7 @@ export function computeLayout(
       positions.set(cluster.id, { x: cx, y: cy });
 
       const children = childrenMap.get(cluster.id) ?? [];
-      const childRadius = Math.max(50, children.length * 14);
+      const childRadius = Math.max(30, children.length * 12);
       children.forEach((childId, chi) => {
         const childAngle =
           (chi / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;

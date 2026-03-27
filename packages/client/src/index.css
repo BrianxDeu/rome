@@ -115,7 +115,7 @@ a {
 .dp-label { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#999; margin-bottom:4px; display:block; }
 .dp-input { width:100%; padding:7px 14px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; }
 .dp-input:focus { outline:none; border-color:#B81917; background:#FFF; }
-.dp-textarea { width:100%; padding:7px 10px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:11px; min-height:70px; resize:vertical; }
+.dp-textarea { width:100%; padding:7px 14px; background:#F8F8F8; border:1px solid #E7E7E7; color:#1A1A1A; font-family:'Tomorrow',sans-serif; font-size:13px; min-height:70px; resize:vertical; }
 .dp-textarea:focus { outline:none; border-color:#B81917; background:#FFF; }
 .dp-row { display:flex; gap:6px; }
 .dp-row > * { flex:1; }
@@ -189,7 +189,7 @@ a {
 .board-card-chip { font-size:8px; letter-spacing:0.8px; padding:2px 6px; border-radius:2px; text-transform:uppercase; }
 .board-card-owner { font-size:9px; color:#777; }
 .board-card-body { margin-top:10px; padding-top:10px; border-top:1px solid #F5F5F5; }
-.board-card-body textarea { width:100%; min-height:60px; padding:8px 10px; background:#FAFAFA; border:1px solid #E7E7E7; font-family:'Tomorrow',sans-serif; font-size:10px; color:#1A1A1A; resize:vertical; line-height:1.5; }
+.board-card-body textarea { background:#FAFAFA; border:1px solid #E7E7E7; font-family:'Tomorrow',sans-serif; font-size:13px; color:#1A1A1A; resize:vertical; line-height:1.5; }
 .board-card-body textarea:focus { outline:none; border-color:#B81917; background:#FFF; }
 .board-card-fields { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .board-card-fields .dp-field { margin-bottom:0; flex:1; min-width:120px; }

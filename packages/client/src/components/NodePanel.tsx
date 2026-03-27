@@ -227,11 +227,11 @@ export function NodePanel() {
         </div>
         <div className="dp-field">
           <Label className="dp-label">Deliverables</Label>
-          <Textarea className="font-[Tomorrow] text-[11px]" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
+          <Textarea className="font-[Tomorrow] text-[13px]" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
         </div>
         <div className="dp-field">
           <Label className="dp-label">Notes</Label>
-          <Textarea className="font-[Tomorrow] text-[11px]" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+          <Textarea className="font-[Tomorrow] text-[13px]" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
         </div>
         <div className="dp-field">
           <Label className="dp-label">RACI</Label>
