@@ -193,6 +193,21 @@ export function GraphView() {
     moved: boolean;
   } | null>(null);
 
+  // Get all descendants of a node (recursive via parent_of edges)
+  function getAllDescendants(nodeId: string): string[] {
+    const result: string[] = [];
+    const queue = [nodeId];
+    while (queue.length) {
+      const current = queue.shift()!;
+      const kids = childrenMap.get(current) ?? [];
+      for (const kid of kids) {
+        result.push(kid);
+        queue.push(kid);
+      }
+    }
+    return result;
+  }
+
   function onNodeMouseDown(e: React.MouseEvent, nodeId: string) {
     e.stopPropagation();
     const pos = posMap.get(nodeId);
@@ -219,10 +234,23 @@ export function GraphView() {
         const v = vpRef.current;
         const newX = ds.startNX + dx / v.z;
         const newY = ds.startNY + dy / v.z;
+        const deltaX = newX - ds.lastX;
+        const deltaY = newY - ds.lastY;
         ds.lastX = newX;
         ds.lastY = newY;
         onDragMove(ds.id, newX, newY);
         updateNode(ds.id, { x: newX, y: newY });
+        // Move all hidden descendants with the parent
+        const descendants = getAllDescendants(ds.id);
+        for (const descId of descendants) {
+          const descPos = posMap.get(descId);
+          if (descPos) {
+            const nx = descPos.x + deltaX;
+            const ny = descPos.y + deltaY;
+            onDragMove(descId, nx, ny);
+            updateNode(descId, { x: nx, y: ny });
+          }
+        }
       }
     };
 
@@ -242,10 +270,22 @@ export function GraphView() {
       if (ds?.moved) {
         const { lastX, lastY } = ds;
         if (Number.isFinite(lastX) && Number.isFinite(lastY)) {
+          // Save dragged node position
           api(`/nodes/${ds.id}`, {
             method: "PATCH",
             body: JSON.stringify({ x: Math.round(lastX * 10) / 10, y: Math.round(lastY * 10) / 10, position_pinned: true }),
           }).catch((err) => console.error("Failed to save position:", err));
+          // Save all descendant positions too
+          const descendants = getAllDescendants(ds.id);
+          for (const descId of descendants) {
+            const descPos = posMap.get(descId);
+            if (descPos && Number.isFinite(descPos.x) && Number.isFinite(descPos.y)) {
+              api(`/nodes/${descId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ x: Math.round(descPos.x * 10) / 10, y: Math.round(descPos.y * 10) / 10, position_pinned: true }),
+              }).catch(() => {});
+            }
+          }
         }
       }
       dragState.current = null;
