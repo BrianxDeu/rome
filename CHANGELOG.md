@@ -2,6 +2,11 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.3.1.1] - 2026-03-30
+
+### Fixed
+- Board card text fields (notes, deliverables, RACI, budget) now auto-save as you type instead of only on blur, preventing data loss when switching between cards
+
 ## [0.3.1.0] - 2026-03-30
 
 ### Added

@@ -499,11 +499,40 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     } catch (err) { console.error("[BoardView]", err); }
   }
 
+  // Debounced patch: saves text fields after 500ms of inactivity.
+  // Prevents data loss when card collapses (unmount skips onBlur).
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  function debouncedPatch(id: string, field: string, value: unknown) {
+    const key = `${id}:${field}`;
+    const existing = debounceTimers.current.get(key);
+    if (existing) clearTimeout(existing);
+    debounceTimers.current.set(key, setTimeout(() => {
+      debounceTimers.current.delete(key);
+      patchNode(id, field, value);
+    }, 500));
+  }
+
+  // Flush any pending debounced patches (called on unmount)
+  useEffect(() => {
+    return () => {
+      for (const timer of debounceTimers.current.values()) clearTimeout(timer);
+      debounceTimers.current.clear();
+    };
+  }, []);
+
   function handleFieldChange(nodeId: string, field: keyof Node, value: unknown) {
     updateNode(nodeId, { [field]: value } as Partial<Node>);
+    debouncedPatch(nodeId, field, value);
   }
 
   function handleFieldBlur(nodeId: string, field: string, value: unknown) {
+    // Flush any pending debounce and save immediately
+    const key = `${nodeId}:${field}`;
+    const existing = debounceTimers.current.get(key);
+    if (existing) {
+      clearTimeout(existing);
+      debounceTimers.current.delete(key);
+    }
     patchNode(nodeId, field, value);
   }
 
@@ -725,13 +754,13 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 <div className="dp-field">
                   <Label className="dp-label">Start</Label>
                   <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.startDate ?? ""}
-                    onChange={(e) => { handleFieldChange(n.id, "startDate", e.target.value || null); patchNode(n.id, "startDate", e.target.value || null); }}
+                    onChange={(e) => { updateNode(n.id, { startDate: e.target.value || null }); patchNode(n.id, "startDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
                   <Label className="dp-label">End</Label>
                   <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.endDate ?? ""}
-                    onChange={(e) => { handleFieldChange(n.id, "endDate", e.target.value || null); patchNode(n.id, "endDate", e.target.value || null); }}
+                    onChange={(e) => { updateNode(n.id, { endDate: e.target.value || null }); patchNode(n.id, "endDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
