@@ -64,6 +64,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const boardDrag = useRef<{ id: string; section: string; clusterId?: string } | null>(null);
   const wsDrag = useRef<{ ws: string } | null>(null);
   const wsDragOccurred = useRef(false);
+  const clusterDrag = useRef<{ id: string; ws: string } | null>(null);
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
 
@@ -383,6 +384,73 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
       setNodes(graph.nodes);
       setEdges(graph.edges);
+    }
+  }
+
+  // Node group (cluster) drag-reorder within a workstream
+  function onClusterDragStart(e: React.DragEvent, clusterId: string, ws: string) {
+    clusterDrag.current = { id: clusterId, ws };
+    e.dataTransfer.effectAllowed = "move";
+    (e.target as HTMLElement).classList.add("dragging");
+    e.stopPropagation(); // prevent ws drag from firing
+  }
+
+  function onClusterDragEnd(e: React.DragEvent) {
+    (e.target as HTMLElement).classList.remove("dragging");
+    document.querySelectorAll(".cluster-drag-over-top,.cluster-drag-over-bottom").forEach((el) => {
+      el.classList.remove("cluster-drag-over-top", "cluster-drag-over-bottom");
+    });
+    clusterDrag.current = null;
+  }
+
+  function onClusterDragOver(e: React.DragEvent, targetId: string) {
+    e.preventDefault();
+    if (!clusterDrag.current || clusterDrag.current.id === targetId) return;
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    (e.currentTarget as HTMLElement).classList.remove("cluster-drag-over-top", "cluster-drag-over-bottom");
+    (e.currentTarget as HTMLElement).classList.add(e.clientY < mid ? "cluster-drag-over-top" : "cluster-drag-over-bottom");
+  }
+
+  function onClusterDragLeave(e: React.DragEvent) {
+    (e.currentTarget as HTMLElement).classList.remove("cluster-drag-over-top", "cluster-drag-over-bottom");
+  }
+
+  async function onClusterDrop(e: React.DragEvent, targetId: string, clustersList: Node[]) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.remove("cluster-drag-over-top", "cluster-drag-over-bottom");
+    if (!clusterDrag.current || clusterDrag.current.id === targetId) return;
+
+    const dragId = clusterDrag.current.id;
+    clusterDrag.current = null;
+
+    const currentOrder = clustersList.map((c) => c.id);
+    const fromIdx = currentOrder.indexOf(dragId);
+    if (fromIdx < 0) return;
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const insertAfter = e.clientY >= rect.top + rect.height / 2;
+    const reordered = currentOrder.filter((id) => id !== dragId);
+    const insertIdx = reordered.indexOf(targetId) + (insertAfter ? 1 : 0);
+    reordered.splice(insertIdx, 0, dragId);
+
+    // Persist sort_order
+    const patches = reordered.map((id, i) => ({ id, sortOrder: (i + 1) * 10 }));
+    for (const p of patches) {
+      updateNode(p.id, { sortOrder: p.sortOrder });
+    }
+    try {
+      await Promise.all(
+        patches.map((p) =>
+          api(`/nodes/${p.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sort_order: p.sortOrder }),
+          })
+        )
+      );
+    } catch (err) {
+      console.error("[BoardView] cluster reorder failed:", err);
     }
   }
 
@@ -1056,8 +1124,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 const orderedChildren = orderedIds.map((id) => children.find((n) => n.id === id)).filter(Boolean) as Node[];
                 const clColor = priorityColor(cluster.priority) !== "#999" ? priorityColor(cluster.priority) : color;
                 return (
-                  <div key={cluster.id} className="board-subgroup">
-                    <div className="board-subgroup-header" onClick={() => toggleSub(subKey)} style={{ borderLeftColor: clColor, borderLeftWidth: 3 }}>
+                  <div
+                    key={cluster.id}
+                    className="board-subgroup"
+                    onDragOver={isSubCol ? (e) => onClusterDragOver(e, cluster.id) : undefined}
+                    onDragLeave={isSubCol ? onClusterDragLeave : undefined}
+                    onDrop={isSubCol ? (e) => onClusterDrop(e, cluster.id, clusters) : undefined}
+                  >
+                    <div
+                      className="board-subgroup-header"
+                      draggable={isSubCol}
+                      onDragStart={isSubCol ? (e) => onClusterDragStart(e, cluster.id, ws) : undefined}
+                      onDragEnd={isSubCol ? onClusterDragEnd : undefined}
+                      onClick={() => toggleSub(subKey)}
+                      style={{ borderLeftColor: clColor, borderLeftWidth: 3, cursor: isSubCol ? "grab" : "pointer" }}
+                    >
                       <div className="board-subgroup-toggle">{isSubCol ? "\u25B6" : "\u25BC"}</div>
                       <div
                         className="board-subgroup-label"

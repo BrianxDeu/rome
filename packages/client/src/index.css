@@ -215,6 +215,10 @@ a {
 .board-group-header[draggable="true"] { cursor:grab; }
 .board-group-header[draggable="true"]:active { cursor:grabbing; }
 .ws-drag-handle:active { cursor:grabbing; }
+.board-subgroup.cluster-drag-over-top { border-top:2px solid #B81917; }
+.board-subgroup.cluster-drag-over-bottom { border-bottom:2px solid #B81917; }
+.board-subgroup-header[draggable="true"] { cursor:grab; }
+.board-subgroup-header[draggable="true"]:active { cursor:grabbing; }
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -303,4 +307,172 @@ a {
   html {
     @apply font-sans;
   }
+}
+
+/* Archive View */
+.archive-view {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+.archive-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+.archive-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-family: var(--font-family);
+}
+.archive-count {
+  font-size: 13px;
+  color: var(--rome-text-muted);
+}
+.archive-ws-card {
+  border: 1px solid var(--rome-border);
+  margin-bottom: 12px;
+  background: var(--rome-bg);
+}
+.archive-ws-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+}
+.archive-ws-header:hover {
+  background: var(--rome-surface);
+}
+.archive-ws-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.archive-ws-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  flex-shrink: 0;
+}
+.archive-ws-name {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-family);
+}
+.archive-ws-meta {
+  font-size: 12px;
+  color: var(--rome-text-muted);
+}
+.archive-ws-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.archive-btn-restore {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--rome-red);
+  background: var(--rome-bg);
+  color: var(--rome-red);
+  cursor: pointer;
+  font-family: var(--font-family);
+  text-transform: uppercase;
+}
+.archive-btn-restore:hover {
+  background: #fef2f2;
+}
+.archive-btn-restore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.archive-chevron {
+  font-size: 14px;
+  color: #999;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.archive-chevron.open {
+  transform: rotate(90deg);
+}
+.archive-ws-body {
+  border-top: 1px solid var(--rome-border);
+}
+.archive-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px 80px 80px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+  align-items: center;
+  cursor: pointer;
+}
+.archive-row:hover {
+  background: var(--rome-surface);
+}
+.archive-row:last-child {
+  border-bottom: none;
+}
+.archive-row-header {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--rome-text-muted);
+  text-transform: uppercase;
+  background: var(--rome-surface);
+  cursor: default;
+}
+.archive-row-header:hover {
+  background: var(--rome-surface);
+}
+.archive-group-label {
+  font-size: 11px;
+  color: var(--rome-text-muted);
+  font-weight: 600;
+  padding: 8px 20px;
+  background: #f5f5f5;
+  border-bottom: 1px solid var(--rome-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.archive-node-name {
+  font-weight: 500;
+}
+.archive-completed-by,
+.archive-completed-at {
+  color: var(--rome-text-muted);
+}
+.archive-status-done {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: #dcfce7;
+  color: #16a34a;
+  font-weight: 600;
+}
+.archive-btn-topbar {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border: 1px solid var(--rome-border);
+  background: var(--rome-bg);
+  color: var(--rome-text-muted);
+  cursor: pointer;
+  font-family: var(--font-family);
+  text-transform: uppercase;
+}
+.archive-btn-topbar.active {
+  background: var(--rome-red);
+  color: #fff;
+  border-color: var(--rome-red);
+}
+.archive-btn-topbar:hover:not(.active) {
+  background: var(--rome-surface);
 }
