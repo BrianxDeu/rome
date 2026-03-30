@@ -253,12 +253,26 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   }
 
   function getBoardOrder(sectionKey: string, nodeIds: string[]): string[] {
+    // First check local override (for optimistic reorder before API responds)
     const order = boardOrder[sectionKey];
-    if (!order) return nodeIds;
-    const ordered: string[] = [];
-    order.forEach((id) => { if (nodeIds.includes(id)) ordered.push(id); });
-    nodeIds.forEach((id) => { if (!ordered.includes(id)) ordered.push(id); });
-    return ordered;
+    if (order) {
+      const ordered: string[] = [];
+      order.forEach((id) => { if (nodeIds.includes(id)) ordered.push(id); });
+      nodeIds.forEach((id) => { if (!ordered.includes(id)) ordered.push(id); });
+      return ordered;
+    }
+    // Otherwise sort by sort_order from DB, falling back to original order
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    return [...nodeIds].sort((a, b) => {
+      const aNode = nodeMap.get(a);
+      const bNode = nodeMap.get(b);
+      const aOrder = aNode?.sortOrder;
+      const bOrder = bNode?.sortOrder;
+      if (aOrder != null && bOrder != null) return aOrder - bOrder;
+      if (aOrder != null) return -1;
+      if (bOrder != null) return 1;
+      return 0; // preserve original order
+    });
   }
 
   function onBoardDragStart(e: React.DragEvent, nodeId: string, sectionKey: string, clusterId?: string) {
@@ -467,7 +481,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         setEdges(graph.edges);
       } catch (err) { console.error("[BoardView]", err); }
     } else {
-      // Same-group reorder (existing logic)
+      // Same-group reorder: persist sort_order to DB
       const wsKey = sectionKey.split("/")[0];
       const sectionNodes = leafNodes.filter((n) => n.workstream === wsKey);
       const filteredNodes = sectionKey.includes("/")
@@ -485,7 +499,28 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
       const insertIdx = newIds.indexOf(targetId) + (insertAfter ? 1 : 0);
       newIds.splice(insertIdx, 0, dragId);
 
+      // Optimistic local update
       setBoardOrder((prev) => ({ ...prev, [sectionKey]: newIds }));
+
+      // Persist sort_order with gaps of 10
+      const patches = newIds.map((id, i) => ({ id, sortOrder: (i + 1) * 10 }));
+      for (const p of patches) {
+        updateNode(p.id, { sortOrder: p.sortOrder });
+      }
+      try {
+        await Promise.all(
+          patches.map((p) =>
+            api(`/nodes/${p.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ sort_order: p.sortOrder }),
+            })
+          )
+        );
+        // Clear local override now that DB has the order
+        setBoardOrder((prev) => { const next = { ...prev }; delete next[sectionKey]; return next; });
+      } catch (err) {
+        console.error("[BoardView] card reorder failed:", err);
+      }
     }
 
     boardDrag.current = null;
@@ -925,7 +960,15 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
         const clusters = Array.from(clusterIds)
           .map((id) => nodes.find((n) => n.id === id))
-          .filter(Boolean) as Node[];
+          .filter(Boolean)
+          .sort((a, b) => {
+            const aOrder = (a as Node).sortOrder;
+            const bOrder = (b as Node).sortOrder;
+            if (aOrder != null && bOrder != null) return aOrder - bOrder;
+            if (aOrder != null) return -1;
+            if (bOrder != null) return 1;
+            return 0;
+          }) as Node[];
 
         // Task nodes in this workstream: leaf nodes that belong to a cluster (have a parent)
         // OR are ungrouped (no parent, but not a cluster themselves)
