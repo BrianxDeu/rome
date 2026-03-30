@@ -13,7 +13,8 @@ export type RomeEvent =
   | { type: "edge:deleted"; payload: { id: string } }
   | { type: "task:created"; payload: Record<string, unknown> }
   | { type: "task:updated"; payload: Record<string, unknown> }
-  | { type: "task:deleted"; payload: { id: string } };
+  | { type: "task:deleted"; payload: { id: string } }
+  | { type: "graph:refetch"; payload: Record<string, unknown> };
 
 let io: SocketServer | null = null;
 

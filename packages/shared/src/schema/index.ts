@@ -27,6 +27,9 @@ export const nodes = sqliteTable("nodes", {
   positionPinned: integer("position_pinned").default(0),
   sortOrder: integer("sort_order"),
   attachments: text("attachments"),
+  completedBy: text("completed_by"),
+  completedAt: text("completed_at"),
+  archivedAt: text("archived_at"),
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id),

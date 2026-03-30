@@ -178,6 +178,18 @@ export function nodeRoutes(db: Db): Router {
     if (data.sort_order !== undefined) changes.sortOrder = data.sort_order;
     if (data.attachments !== undefined) changes.attachments = data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null;
 
+    // Completion tracking: set completedBy/completedAt when status changes to done
+    if (data.status !== undefined && data.status !== existing.status) {
+      if (data.status === "done") {
+        changes.completedBy = req.auth!.userId;
+        changes.completedAt = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+      } else if (existing.status === "done") {
+        // Moving away from done — clear completion metadata
+        changes.completedBy = null;
+        changes.completedAt = null;
+      }
+    }
+
     // Cascade: if this is a workstream header being renamed, update children's workstream field
     const cascadedNodes: Array<Record<string, unknown>> = [];
     if (data.name !== undefined && data.name !== existing.name && !existing.workstream) {

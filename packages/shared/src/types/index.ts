@@ -29,6 +29,9 @@ export interface Node {
   positionPinned: number | null;
   sortOrder: number | null;
   attachments: string | null;
+  completedBy: string | null;
+  completedAt: string | null;
+  archivedAt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

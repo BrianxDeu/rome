@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "../stores/authStore";
 import { useGraphStore } from "../stores/graphStore";
+import { api } from "../api";
 import type { Node, Edge } from "@rome/shared";
 
 export function useSync() {
@@ -35,6 +36,13 @@ export function useSync() {
 
     socket.on("edge:deleted", (payload: { id: string }) => {
       useGraphStore.getState().removeEdge(payload.id);
+    });
+
+    socket.on("graph:refetch", () => {
+      api<{ nodes: Node[]; edges: Edge[] }>("/graph").then(({ nodes, edges }) => {
+        useGraphStore.getState().setNodes(nodes);
+        useGraphStore.getState().setEdges(edges);
+      }).catch(console.error);
     });
 
     return () => {

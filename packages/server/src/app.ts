@@ -8,6 +8,7 @@ import { nodeRoutes } from "./routes/nodes.js";
 import { edgeRoutes } from "./routes/edges.js";
 import { graphRoutes, budgetRoutes } from "./routes/graph.js";
 import { taskRoutes } from "./routes/tasks.js";
+import { archiveRoutes } from "./routes/archive.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { createMcpHandler } from "./mcp/server.js";
 
@@ -28,6 +29,7 @@ export function createApp(db: Db) {
   app.use("/api/graph", authMiddleware, graphRoutes(db));
   app.use("/api/budget", authMiddleware, budgetRoutes(db));
   app.use("/api/tasks", authMiddleware, taskRoutes(db));
+  app.use("/api/archive", authMiddleware, archiveRoutes(db));
 
   // --- MCP OAuth 2.0 endpoints (for Claude Co-Work custom connectors) ---
   // Follows MCP spec: RFC9728 Protected Resource Metadata → OAuth Authorization Server Metadata

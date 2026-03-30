@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 
-export type ViewTab = "tasks" | "board" | "graph" | "gantt" | "budget";
+export type ViewTab = "tasks" | "board" | "graph" | "gantt" | "budget" | "archive";
 
 interface TopBarProps {
   activeView: ViewTab;
@@ -60,9 +60,15 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, on
         ))}
       </div>
       <div className="top-actions">
-        {onAddNode && activeView !== "tasks" && <button className="btn" onClick={onAddNode}>+ NODE</button>}
-        {onAddNodeGroup && activeView !== "tasks" && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
-        {onAddWorkstream && activeView !== "tasks" && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
+        {onAddNode && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddNode}>+ NODE</button>}
+        {onAddNodeGroup && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
+        {onAddWorkstream && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
+        <button
+          className={`archive-btn-topbar ${activeView === "archive" ? "active" : ""}`}
+          onClick={() => onViewChange("archive")}
+        >
+          ARCHIVE
+        </button>
         <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
         {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}
         <button className="btn" onClick={logout}>LOGOUT</button>

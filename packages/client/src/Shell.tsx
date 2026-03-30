@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { TopBar, type ViewTab } from "./components/TopBar";
 import { AddNodeModal } from "./components/AddNodeModal";
 import { AddNodeGroupModal } from "./components/AddNodeGroupModal";
 import { AddWorkstreamModal } from "./components/AddWorkstreamModal";
+import { ArchiveView } from "./pages/ArchiveView";
 import { BoardView } from "./pages/BoardView";
 import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
@@ -12,6 +13,7 @@ import { NodePanel } from "./components/NodePanel";
 import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
 import { useGraphStore } from "./stores/graphStore";
+import { api } from "./api";
 
 interface AddNodeModalState {
   open: boolean;
@@ -27,6 +29,11 @@ export function Shell() {
   const selectNode = useGraphStore((s) => s.selectNode);
   useGraph();
   useSync();
+
+  // Trigger lazy archive check on mount
+  useEffect(() => {
+    api<{ archived: number }>("/archive/check", { method: "POST" }).catch(console.error);
+  }, []);
 
   const selectedNode = useGraphStore((s) => s.selectedNode);
 
@@ -65,10 +72,12 @@ export function Shell() {
           <GanttView />
         ) : activeView === "budget" ? (
           <BudgetView />
+        ) : activeView === "archive" ? (
+          <ArchiveView />
         ) : (
           <GraphView />
         )}
-        {(activeView === "graph" || activeView === "gantt" || activeView === "board") && selectedNode && <NodePanel />}
+        {(activeView === "graph" || activeView === "gantt" || activeView === "board" || activeView === "archive") && selectedNode && <NodePanel />}
       </div>
 
       {addNodeModal.open && (

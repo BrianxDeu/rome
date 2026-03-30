@@ -2,6 +2,21 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.4.0.0] - 2026-03-30 — Archive View
+
+Completed workstreams now auto-archive after 24 hours, clearing clutter from active views. The new ARCHIVE button shows who completed each task, when, and lets you restore workstreams if work turns out to be incomplete. Accountability for DxD, built in.
+
+### Added
+- **Archive view** with expandable workstream cards showing task completion metadata (who, when, status, budget)
+- **ARCHIVE button** in TopBar far-right group, red when active
+- **Completion tracking**: `completedBy` and `completedAt` fields auto-set when a node's status changes to "done"
+- **Auto-archive**: workstreams where all tasks are done for 24+ hours are archived on next page load via `POST /api/archive/check`
+- **Restore**: one-click unarchive puts a workstream back in all active views
+- **`graph:refetch` Socket.IO event** for cross-client sync when workstreams are archived or restored
+- Archived nodes filtered from Graph, Board, Gantt, and Budget views
+- NodePanel accessible from archive view for inspecting/editing archived nodes
+- Migration backfills `completedAt` from `updatedAt` for pre-existing done nodes
+
 ## [0.3.1.1] - 2026-03-30
 
 ### Fixed

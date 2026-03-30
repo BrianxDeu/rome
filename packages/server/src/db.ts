@@ -74,4 +74,21 @@ export function initTables(sqlite: BetterSqlite3.Database) {
   } catch {
     // Column already exists — ignore
   }
+  try {
+    sqlite.exec(`ALTER TABLE nodes ADD COLUMN completed_by TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+  try {
+    sqlite.exec(`ALTER TABLE nodes ADD COLUMN completed_at TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+  try {
+    sqlite.exec(`ALTER TABLE nodes ADD COLUMN archived_at TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+  // Backfill: set completed_at from updated_at for existing done nodes
+  sqlite.exec(`UPDATE nodes SET completed_at = updated_at WHERE status = 'done' AND completed_at IS NULL`);
 }

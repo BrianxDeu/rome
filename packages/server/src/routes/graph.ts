@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { nodes, edges } from "@rome/shared/schema";
 import type { Db } from "../db.js";
 
@@ -7,7 +7,7 @@ export function graphRoutes(db: Db): Router {
   const router = Router();
 
   router.get("/", (_req, res) => {
-    const allNodes = db.select().from(nodes).all();
+    const allNodes = db.select().from(nodes).where(isNull(nodes.archivedAt)).all();
     const allEdges = db.select().from(edges).all();
     res.json({ nodes: allNodes, edges: allEdges });
   });
@@ -85,7 +85,7 @@ export function budgetRoutes(db: Db): Router {
   const router = Router();
 
   router.get("/", (_req, res) => {
-    const allNodes = db.select().from(nodes).all();
+    const allNodes = db.select().from(nodes).where(isNull(nodes.archivedAt)).all();
     const childrenMap = buildParentMap(db);
 
     const budgetMap = new Map<string, number>();
