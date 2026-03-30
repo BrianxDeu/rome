@@ -67,4 +67,11 @@ export function initTables(sqlite: BetterSqlite3.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_personal_tasks_user ON personal_tasks(user_id);
   `);
+
+  // Migrations — idempotent ALTER TABLE additions
+  try {
+    sqlite.exec(`ALTER TABLE nodes ADD COLUMN sort_order INTEGER`);
+  } catch {
+    // Column already exists — ignore
+  }
 }

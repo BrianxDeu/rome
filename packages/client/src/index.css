@@ -210,6 +210,11 @@ a {
 .board-card-drag { width:18px; display:flex; align-items:center; justify-content:center; cursor:grab; color:#CCC; flex-shrink:0; font-size:10px; letter-spacing:1px; }
 .board-card-drag:hover { color:#999; }
 .board-card-drag:active { cursor:grabbing; }
+.board-group.ws-drag-over-top { border-top:2px solid #B81917; }
+.board-group.ws-drag-over-bottom { border-bottom:2px solid #B81917; }
+.board-group-header[draggable="true"] { cursor:grab; }
+.board-group-header[draggable="true"]:active { cursor:grabbing; }
+.ws-drag-handle:active { cursor:grabbing; }
 
 @theme inline {
   --font-heading: var(--font-sans);

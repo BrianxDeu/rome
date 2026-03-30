@@ -27,6 +27,7 @@ export interface Node {
   x: number | null;
   y: number | null;
   positionPinned: number | null;
+  sortOrder: number | null;
   attachments: string | null;
   createdBy: string;
   createdAt: string;

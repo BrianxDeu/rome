@@ -28,9 +28,13 @@ const edgeTypes = Object.keys(EDGE_TYPES).filter((t) => t !== "parent_of");
 // Workstream colors
 const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
 
-function wsColor(ws: string, all: string[]): string {
-  const idx = all.indexOf(ws);
-  return WS_PALETTE[idx >= 0 ? idx % WS_PALETTE.length : 0];
+function wsColor(ws: string): string {
+  // Derive color from name hash so it stays stable across reordering
+  let hash = 0;
+  for (let i = 0; i < ws.length; i++) {
+    hash = ((hash << 5) - hash + ws.charCodeAt(i)) | 0;
+  }
+  return WS_PALETTE[((hash % WS_PALETTE.length) + WS_PALETTE.length) % WS_PALETTE.length];
 }
 
 interface BoardViewProps {
@@ -58,8 +62,21 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
   const [boardAddLabel, setBoardAddLabel] = useState("");
   const [collapsedWorkstreams, setCollapsedWorkstreams] = useState<Set<string> | null>(null);
   const boardDrag = useRef<{ id: string; section: string; clusterId?: string } | null>(null);
+  const wsDrag = useRef<{ ws: string } | null>(null);
+  const wsDragOccurred = useRef(false);
 
   const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
+
+  // Build a map of workstream name -> sort_order from ws header nodes
+  const wsHeaderMap = useMemo(() => {
+    const map = new Map<string, { sortOrder: number | null; headerId: string }>();
+    for (const n of nodes) {
+      if (!parentMap.has(n.id) && !isGoalNode(n) && n.name && !n.workstream) {
+        map.set(n.name, { sortOrder: n.sortOrder, headerId: n.id });
+      }
+    }
+    return map;
+  }, [nodes, parentMap]);
 
   const workstreams = useMemo(() => {
     const ws = new Set<string>();
@@ -74,8 +91,15 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         ws.add(n.name);
       }
     }
-    return Array.from(ws).sort();
-  }, [nodes, parentMap]);
+    return Array.from(ws).sort((a, b) => {
+      const aOrder = wsHeaderMap.get(a)?.sortOrder;
+      const bOrder = wsHeaderMap.get(b)?.sortOrder;
+      if (aOrder != null && bOrder != null) return aOrder - bOrder;
+      if (aOrder != null) return -1;
+      if (bOrder != null) return 1;
+      return a.localeCompare(b);
+    });
+  }, [nodes, parentMap, wsHeaderMap]);
 
   // Initialize collapsed workstreams: all except the first one
   useEffect(() => {
@@ -263,6 +287,89 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
   function onBoardDragLeave(e: React.DragEvent) {
     (e.currentTarget as HTMLElement).classList.remove("drag-over-top", "drag-over-bottom");
+  }
+
+  function onWsDragStart(e: React.DragEvent, ws: string) {
+    wsDrag.current = { ws };
+    wsDragOccurred.current = true;
+    e.dataTransfer.effectAllowed = "move";
+    (e.target as HTMLElement).classList.add("dragging");
+  }
+
+  function onWsDragEnd(e: React.DragEvent) {
+    (e.target as HTMLElement).classList.remove("dragging");
+    document.querySelectorAll(".ws-drag-over-top,.ws-drag-over-bottom").forEach((el) => {
+      el.classList.remove("ws-drag-over-top", "ws-drag-over-bottom");
+    });
+    wsDrag.current = null;
+  }
+
+  function onWsDragOver(e: React.DragEvent, targetWs: string) {
+    e.preventDefault();
+    if (!wsDrag.current || wsDrag.current.ws === targetWs) return;
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    (e.currentTarget as HTMLElement).classList.remove("ws-drag-over-top", "ws-drag-over-bottom");
+    (e.currentTarget as HTMLElement).classList.add(e.clientY < mid ? "ws-drag-over-top" : "ws-drag-over-bottom");
+  }
+
+  function onWsDragLeave(e: React.DragEvent) {
+    (e.currentTarget as HTMLElement).classList.remove("ws-drag-over-top", "ws-drag-over-bottom");
+  }
+
+  async function onWsDrop(e: React.DragEvent, targetWs: string) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.remove("ws-drag-over-top", "ws-drag-over-bottom");
+    if (!wsDrag.current || wsDrag.current.ws === targetWs) return;
+
+    const dragWs = wsDrag.current.ws;
+    wsDrag.current = null;
+
+    // Compute new order
+    const currentOrder = [...workstreams];
+    const fromIdx = currentOrder.indexOf(dragWs);
+    const toIdx = currentOrder.indexOf(targetWs);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const insertAfter = e.clientY >= rect.top + rect.height / 2;
+
+    const reordered = currentOrder.filter((w) => w !== dragWs);
+    const insertIdx = reordered.indexOf(targetWs) + (insertAfter ? 1 : 0);
+    reordered.splice(insertIdx, 0, dragWs);
+
+    // Assign sort_order values with gaps of 10
+    const patches: Array<{ id: string; sortOrder: number }> = [];
+    for (let i = 0; i < reordered.length; i++) {
+      const header = wsHeaderMap.get(reordered[i]);
+      if (header) {
+        patches.push({ id: header.headerId, sortOrder: (i + 1) * 10 });
+      }
+    }
+
+    // Optimistic update: patch local store immediately
+    for (const p of patches) {
+      updateNode(p.id, { sortOrder: p.sortOrder });
+    }
+
+    // Persist to API
+    try {
+      await Promise.all(
+        patches.map((p) =>
+          api(`/nodes/${p.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sort_order: p.sortOrder }),
+          })
+        )
+      );
+    } catch (err) {
+      console.error("[BoardView] workstream reorder failed:", err);
+      // Refetch to restore consistent state
+      const graph = await api<{ nodes: Node[]; edges: Edge[] }>("/graph");
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+    }
   }
 
   function onSectionDragOver(e: React.DragEvent) {
@@ -768,7 +875,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         </div>
       )}
       {workstreams.map((ws) => {
-        const color = wsColor(ws, workstreams);
+        const color = wsColor(ws);
         // Find the workstream header node (top-level, no ws field, name matches)
         const wsHeader = nodes.find((n) => n.name === ws && !parentMap.has(n.id) && !n.workstream);
 
@@ -799,8 +906,24 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
 
         const isWsCollapsed = collapsedWorkstreams?.has(ws) ?? false;
         return (
-          <div key={ws} className="board-group">
-            <div className="board-group-header" style={{ cursor: "pointer" }} onClick={() => setCollapsedWorkstreams((prev) => { const n = new Set(prev); if (n.has(ws)) n.delete(ws); else n.add(ws); return n; })}>
+          <div
+            key={ws}
+            className="board-group"
+            onDragOver={isWsCollapsed ? (e) => onWsDragOver(e, ws) : undefined}
+            onDragLeave={isWsCollapsed ? onWsDragLeave : undefined}
+            onDrop={isWsCollapsed ? (e) => onWsDrop(e, ws) : undefined}
+          >
+            <div
+              className="board-group-header"
+              style={{ cursor: "pointer" }}
+              draggable={isWsCollapsed}
+              onDragStart={isWsCollapsed ? (e) => onWsDragStart(e, ws) : undefined}
+              onDragEnd={isWsCollapsed ? onWsDragEnd : undefined}
+              onClick={() => { if (wsDragOccurred.current) { wsDragOccurred.current = false; return; } setCollapsedWorkstreams((prev) => { const n = new Set(prev); if (n.has(ws)) n.delete(ws); else n.add(ws); return n; }); }}
+            >
+              {isWsCollapsed && (
+                <div style={{ fontSize: 10, color: "#CCC", cursor: "grab", width: 14, flexShrink: 0, userSelect: "none" }} className="ws-drag-handle">::</div>
+              )}
               <div style={{ fontSize: 10, color: "#999", flexShrink: 0, width: 12, textAlign: "center" }}>{isWsCollapsed ? "\u25B6" : "\u25BC"}</div>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: color, flexShrink: 0 }} />
               <div

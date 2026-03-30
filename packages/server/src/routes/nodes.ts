@@ -36,6 +36,7 @@ const createSchema = z.object({
   x: z.number().nullable().optional(),
   y: z.number().nullable().optional(),
   position_pinned: z.boolean().optional(),
+  sort_order: z.number().int().nullable().optional(),
   attachments: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
 });
 
@@ -127,6 +128,7 @@ export function nodeRoutes(db: Db): Router {
           x: data.x ?? null,
           y: data.y ?? null,
           positionPinned: data.position_pinned ? 1 : 0,
+          sortOrder: data.sort_order ?? null,
           attachments: data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null,
           createdBy: req.auth!.userId,
           createdAt: now,
@@ -173,6 +175,7 @@ export function nodeRoutes(db: Db): Router {
     if (data.x !== undefined) changes.x = data.x;
     if (data.y !== undefined) changes.y = data.y;
     if (data.position_pinned !== undefined) changes.positionPinned = data.position_pinned ? 1 : 0;
+    if (data.sort_order !== undefined) changes.sortOrder = data.sort_order;
     if (data.attachments !== undefined) changes.attachments = data.attachments ? (typeof data.attachments === "string" ? data.attachments : JSON.stringify(data.attachments)) : null;
 
     // Cascade: if this is a workstream header being renamed, update children's workstream field

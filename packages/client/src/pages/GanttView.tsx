@@ -1,10 +1,11 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useGraphStore } from "../stores/graphStore";
 import {
   priorityColor,
   buildClusterMaps,
   isClusterNode,
 } from "../constants";
+import { isGoalNode } from "../utils/graphLayout";
 import type { Node, Edge } from "@rome/shared";
 import { Button } from "../components/ui/button";
 
@@ -13,54 +14,204 @@ type TimeScale = "week" | "month" | "quarter" | "year";
 const PPD: Record<TimeScale, number> = { week: 40, month: 12, quarter: 4, year: 1.5 };
 
 interface GanttRow {
-  type: "group" | "node";
+  type: "workstream" | "nodegroup" | "node";
   workstream?: string;
   node?: Node;
   color?: string;
+  indent?: number;
 }
 
-// Workstream colors
+// Workstream colors — hash-based to match Board view
 const WS_PALETTE = ["#B81917", "#3B82F6", "#8B5CF6", "#16a34a", "#f59e0b", "#06b6d4", "#ec4899"];
+
+function wsColor(ws: string): string {
+  let hash = 0;
+  for (let i = 0; i < ws.length; i++) {
+    hash = ((hash << 5) - hash + ws.charCodeAt(i)) | 0;
+  }
+  return WS_PALETTE[((hash % WS_PALETTE.length) + WS_PALETTE.length) % WS_PALETTE.length];
+}
 
 export function GanttView() {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const selectNode = useGraphStore((s) => s.selectNode);
   const [scale, setScale] = useState<TimeScale>("month");
+  const [collapsedWs, setCollapsedWs] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const wsInitRef = useRef(false);
+  const groupInitRef = useRef(false);
   const ganttScrollRef = useRef<HTMLDivElement>(null);
 
-  const { childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
+  const { parentMap, childrenMap } = useMemo(() => buildClusterMaps(edges), [edges]);
 
-  // Workstreams sorted
-  const workstreams = useMemo(() => {
-    const ws = new Set<string>();
+  // Workstream field values (used to identify ws headers)
+  const wsFieldValues = useMemo(() => {
+    const vals = new Set<string>();
     for (const n of nodes) {
-      if (n.workstream) ws.add(n.workstream);
+      if (n.workstream) vals.add(n.workstream);
     }
-    return Array.from(ws).sort();
+    return vals;
   }, [nodes]);
 
-  // Include leaf nodes + cluster nodes that have dates (e.g. KRs with tasks under them)
-  const ganttNodes = useMemo(
-    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap) || (n.startDate && n.endDate)),
-    [nodes, childrenMap],
+  // Identify ws headers (same logic as BoardView)
+  const isWsHeader = useCallback(
+    (n: Node) => {
+      if (parentMap.has(n.id) || isGoalNode(n) || n.workstream) return false;
+      if ((childrenMap.get(n.id)?.length ?? 0) > 0) return true;
+      if (wsFieldValues.has(n.name)) return true;
+      return false;
+    },
+    [parentMap, childrenMap, wsFieldValues],
   );
 
-  // Build gantt rows
+  // Map ws name -> sort_order from header nodes (same as BoardView)
+  const wsHeaderMap = useMemo(() => {
+    const map = new Map<string, { sortOrder: number | null; headerId: string }>();
+    for (const n of nodes) {
+      if (!parentMap.has(n.id) && !isGoalNode(n) && n.name && !n.workstream) {
+        map.set(n.name, { sortOrder: n.sortOrder, headerId: n.id });
+      }
+    }
+    return map;
+  }, [nodes, parentMap]);
+
+  // Workstreams sorted by sort_order (matching Board view)
+  const workstreams = useMemo(() => {
+    return Array.from(wsFieldValues).sort((a, b) => {
+      const aOrder = wsHeaderMap.get(a)?.sortOrder;
+      const bOrder = wsHeaderMap.get(b)?.sortOrder;
+      if (aOrder != null && bOrder != null) return aOrder - bOrder;
+      if (aOrder != null) return -1;
+      if (bOrder != null) return 1;
+      return a.localeCompare(b);
+    });
+  }, [wsFieldValues, wsHeaderMap]);
+
+  // Node group IDs: direct children of ws headers
+  const nodeGroupIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const n of nodes) {
+      if (isWsHeader(n)) {
+        for (const childId of childrenMap.get(n.id) ?? []) {
+          ids.add(childId);
+        }
+      }
+    }
+    return ids;
+  }, [nodes, isWsHeader, childrenMap]);
+
+  // Map ws header name → node groups under it
+  const nodeById = useMemo(() => {
+    const map = new Map<string, Node>();
+    for (const n of nodes) map.set(n.id, n);
+    return map;
+  }, [nodes]);
+
+  // Collapse all workstreams by default
+  useEffect(() => {
+    if (!wsInitRef.current && workstreams.length > 0) {
+      setCollapsedWs(new Set(workstreams));
+      wsInitRef.current = true;
+    }
+  }, [workstreams]);
+
+  // Collapse all node groups by default
+  useEffect(() => {
+    if (!groupInitRef.current && nodeGroupIds.size > 0) {
+      setCollapsedGroups(new Set(nodeGroupIds));
+      groupInitRef.current = true;
+    }
+  }, [nodeGroupIds]);
+
+  function toggleWs(ws: string) {
+    setCollapsedWs((prev) => {
+      const next = new Set(prev);
+      if (next.has(ws)) next.delete(ws);
+      else next.add(ws);
+      return next;
+    });
+  }
+
+  function toggleGroup(groupId: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }
+
+  // Build hierarchical gantt rows: workstream → node groups → leaf nodes
   const ganttRows = useMemo(() => {
     const rows: GanttRow[] = [];
     workstreams.forEach((ws, i) => {
-      const color = WS_PALETTE[i % WS_PALETTE.length];
-      rows.push({ type: "group", workstream: ws, color });
-      const wsNodes = ganttNodes
-        .filter((n) => n.workstream === ws && n.startDate && n.endDate)
-        .sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
-      wsNodes.forEach((n) => rows.push({ type: "node", node: n }));
+      const color = wsColor(ws);
+      rows.push({ type: "workstream", workstream: ws, color });
+
+      if (collapsedWs.has(ws)) return;
+
+      // Find the ws header node
+      const wsHeader = nodes.find((n) => isWsHeader(n) && n.name === ws);
+      const wsNodeGroupIds = wsHeader ? (childrenMap.get(wsHeader.id) ?? []) : [];
+
+      // Get node groups for this workstream
+      const nodeGroups = wsNodeGroupIds
+        .map((id) => nodeById.get(id))
+        .filter((n): n is Node => !!n)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      if (nodeGroups.length > 0) {
+        // Has node groups: show hierarchy
+        for (const ng of nodeGroups) {
+          rows.push({ type: "nodegroup", node: ng, color, indent: 1 });
+
+          if (!collapsedGroups.has(ng.id)) {
+            // Show leaf children of this node group
+            const leafChildren = (childrenMap.get(ng.id) ?? [])
+              .map((id) => nodeById.get(id))
+              .filter((n): n is Node => !!n)
+              .sort((a, b) => {
+                // Sort by start date if available, else by name
+                if (a.startDate && b.startDate) return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+                return a.name.localeCompare(b.name);
+              });
+            for (const child of leafChildren) {
+              rows.push({ type: "node", node: child, indent: 2 });
+            }
+          }
+        }
+
+        // Also show any leaf nodes directly in this workstream that aren't children of a node group
+        const orphanLeaves = nodes.filter((n) => {
+          if (n.workstream !== ws) return false;
+          if (isWsHeader(n) || nodeGroupIds.has(n.id)) return false;
+          if (isClusterNode(n.id, childrenMap)) return false;
+          // Not a child of any node group in this workstream
+          const parent = parentMap.get(n.id);
+          if (parent && nodeGroupIds.has(parent)) return false;
+          return true;
+        });
+        for (const leaf of orphanLeaves) {
+          rows.push({ type: "node", node: leaf, indent: 1 });
+        }
+      } else {
+        // No node groups: show flat leaf nodes under workstream
+        const wsLeaves = nodes
+          .filter((n) => n.workstream === ws && !isWsHeader(n) && !nodeGroupIds.has(n.id) && !isClusterNode(n.id, childrenMap))
+          .sort((a, b) => {
+            if (a.startDate && b.startDate) return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+            return a.name.localeCompare(b.name);
+          });
+        for (const leaf of wsLeaves) {
+          rows.push({ type: "node", node: leaf, indent: 1 });
+        }
+      }
     });
     return rows;
-  }, [workstreams, ganttNodes]);
+  }, [workstreams, nodes, collapsedWs, collapsedGroups, isWsHeader, childrenMap, nodeById, nodeGroupIds, parentMap]);
 
-  const hasAnyBars = ganttRows.some((r) => r.type === "node" && r.node?.startDate && r.node?.endDate);
+  const hasAnyBars = ganttRows.some((r) => r.node?.startDate && r.node?.endDate);
 
   // Time range
   const ganttStart = new Date("2026-03-01");
@@ -144,16 +295,27 @@ export function GanttView() {
         <div className="gantt-sidebar">
           {/* Spacer to align with canvas header */}
           <div style={{ height: 28, borderBottom: "1px solid #E7E7E7" }} />
-          {ganttRows.map((row, i) => {
-            if (row.type === "group") {
+          {ganttRows.map((row) => {
+            if (row.type === "workstream") {
+              const isCol = collapsedWs.has(row.workstream!);
               return (
-                <div key={`g${row.workstream}`} className="gantt-sidebar-group" style={{ color: row.color }}>
+                <div key={`ws-${row.workstream}`} className="gantt-sidebar-group" style={{ color: row.color, cursor: "pointer", userSelect: "none" }} onClick={() => toggleWs(row.workstream!)}>
+                  <span style={{ display: "inline-block", width: 14, fontSize: 10, transition: "transform 0.15s", transform: isCol ? "rotate(-90deg)" : "rotate(0deg)" }}>&#9660;</span>
                   {row.workstream}
                 </div>
               );
             }
+            if (row.type === "nodegroup") {
+              const isCol = collapsedGroups.has(row.node!.id);
+              return (
+                <div key={`ng-${row.node!.id}`} className="gantt-sidebar-item" style={{ paddingLeft: 20, fontWeight: 600, cursor: "pointer", userSelect: "none", fontSize: 11 }} onClick={() => toggleGroup(row.node!.id)}>
+                  <span style={{ display: "inline-block", width: 12, fontSize: 8, marginRight: 4, transition: "transform 0.15s", transform: isCol ? "rotate(-90deg)" : "rotate(0deg)" }}>&#9660;</span>
+                  {row.node!.name}
+                </div>
+              );
+            }
             return (
-              <div key={row.node!.id} className="gantt-sidebar-item" onClick={() => handleClick(row.node!)}>
+              <div key={row.node!.id} className="gantt-sidebar-item" style={{ paddingLeft: (row.indent ?? 1) * 16 + 12 }} onClick={() => handleClick(row.node!)}>
                 {row.node!.name}
               </div>
             );
@@ -167,9 +329,28 @@ export function GanttView() {
               ))}
             </div>
             <div className="gantt-rows">
-              {ganttRows.map((row, i) => {
-                if (row.type === "group") {
-                  return <div key={`gg${row.workstream}`} style={{ height: 32, borderBottom: "1px solid #E7E7E7", background: "#FAFAFA" }} />;
+              {ganttRows.map((row) => {
+                if (row.type === "workstream") {
+                  return <div key={`gg-${row.workstream}`} style={{ height: 32, borderBottom: "1px solid #E7E7E7", background: "#FAFAFA" }} />;
+                }
+                if (row.type === "nodegroup") {
+                  const n = row.node!;
+                  if (!n.startDate || !n.endDate) return <div key={`ngr-${n.id}`} className="gantt-row" />;
+                  const sd = new Date(n.startDate);
+                  const ed = new Date(n.endDate);
+                  const left = Math.max(0, Math.ceil((sd.getTime() - ganttStart.getTime()) / 864e5) * ppd);
+                  const w = Math.max(4, Math.ceil((ed.getTime() - sd.getTime()) / 864e5) * ppd);
+                  return (
+                    <div key={`ngr-${n.id}`} className="gantt-row">
+                      <div
+                        className="gantt-bar"
+                        style={{ left, width: w, background: row.color ?? priorityColor(n.priority), opacity: 0.7 }}
+                        onClick={() => handleClick(n)}
+                      >
+                        {w > 60 ? n.name : ""}
+                      </div>
+                    </div>
+                  );
                 }
                 const n = row.node!;
                 if (!n.startDate || !n.endDate) return <div key={n.id} className="gantt-row" />;

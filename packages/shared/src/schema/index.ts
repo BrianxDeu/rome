@@ -25,6 +25,7 @@ export const nodes = sqliteTable("nodes", {
   x: real("x"),
   y: real("y"),
   positionPinned: integer("position_pinned").default(0),
+  sortOrder: integer("sort_order"),
   attachments: text("attachments"),
   createdBy: text("created_by")
     .notNull()
