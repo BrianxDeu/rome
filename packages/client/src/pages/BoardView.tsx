@@ -509,7 +509,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
     debounceTimers.current.set(key, setTimeout(() => {
       debounceTimers.current.delete(key);
       patchNode(id, field, value);
-    }, 500));
+    }, 1500));
   }
 
   // Flush any pending debounced patches (called on unmount)
