@@ -40,9 +40,9 @@ export function GanttView() {
     return Array.from(ws).sort();
   }, [nodes]);
 
-  // Leaf nodes only
-  const leafNodes = useMemo(
-    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap)),
+  // Include leaf nodes + cluster nodes that have dates (e.g. KRs with tasks under them)
+  const ganttNodes = useMemo(
+    () => nodes.filter((n) => !isClusterNode(n.id, childrenMap) || (n.startDate && n.endDate)),
     [nodes, childrenMap],
   );
 
@@ -52,13 +52,13 @@ export function GanttView() {
     workstreams.forEach((ws, i) => {
       const color = WS_PALETTE[i % WS_PALETTE.length];
       rows.push({ type: "group", workstream: ws, color });
-      const wsNodes = leafNodes
+      const wsNodes = ganttNodes
         .filter((n) => n.workstream === ws && n.startDate && n.endDate)
         .sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
       wsNodes.forEach((n) => rows.push({ type: "node", node: n }));
     });
     return rows;
-  }, [workstreams, leafNodes]);
+  }, [workstreams, ganttNodes]);
 
   const hasAnyBars = ganttRows.some((r) => r.type === "node" && r.node?.startDate && r.node?.endDate);
 

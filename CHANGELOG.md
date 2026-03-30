@@ -2,6 +2,14 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.3.0.1] - 2026-03-30
+
+### Fixed
+- MCP OAuth flow: browser tab auto-closing before Claude could complete token exchange (replaced JS redirect + window.close with HTTP 302 redirect)
+
+### Changed
+- Gantt view now shows cluster nodes (e.g. KRs) that have start/end dates, not just leaf nodes
+
 ## [0.3.0.0] - 2026-03-27
 
 ### Added

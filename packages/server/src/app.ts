@@ -86,9 +86,9 @@ export function createApp(db: Db) {
     url.searchParams.set("code", code);
     if (state) url.searchParams.set("state", state as string);
 
-    // Send an HTML page that redirects and auto-closes the tab
-    res.setHeader("Content-Type", "text/html");
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Authorized</title></head><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#555"><div style="text-align:center"><p style="font-size:18px">Connected to Rome</p><p style="font-size:13px;color:#999">Redirecting to Claude...</p></div><script>window.location.href=${JSON.stringify(url.toString())};setTimeout(function(){window.close()},1500);</script></body></html>`);
+    // Redirect back to Claude's callback — do NOT auto-close the tab,
+    // as that kills the in-flight token exchange
+    res.redirect(url.toString());
   });
 
   // Dynamic Client Registration (RFC7591) — Claude registers itself as a client
