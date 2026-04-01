@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { v4 as uuid } from "uuid";
 import { eq, count } from "drizzle-orm";
+import rateLimit from "express-rate-limit";
 import { users } from "@rome/shared/schema";
 import type {
   RegisterRequest,
@@ -11,6 +12,16 @@ import type {
 } from "@rome/shared";
 import type { Db } from "../db.js";
 import { getJwtSecret } from "../middleware/auth.js";
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per window
+  message: { error: "Too many attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env["SKIP_RATE_LIMIT"] === "true",
+  validate: { trustProxy: false },
+});
 
 function toPublicUser(
   row: typeof users.$inferSelect,
@@ -28,8 +39,13 @@ function toPublicUser(
 export function authRoutes(db: Db): Router {
   const router = Router();
 
-  router.post("/register", async (req, res) => {
+  router.post("/register", authLimiter, async (req, res) => {
     try {
+      if (process.env["REGISTRATION_ENABLED"] !== "true") {
+        res.status(403).json({ error: "Registration is disabled. Contact an administrator." });
+        return;
+      }
+
       const { username, email, password } = req.body as RegisterRequest;
 
       if (!username || !email || !password) {
@@ -99,7 +115,7 @@ export function authRoutes(db: Db): Router {
     }
   });
 
-  router.post("/login", async (req, res) => {
+  router.post("/login", authLimiter, async (req, res) => {
     try {
       const { username, password } = req.body as LoginRequest;
 

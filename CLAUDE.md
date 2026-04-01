@@ -69,6 +69,10 @@ npm run test --workspace=packages/server
 
 ## Known Gotchas — DO NOT REPEAT
 
+**Self-update rule**: When you discover a new non-obvious gotcha during a session (a bug pattern, silent failure, or counterintuitive behavior that cost real debugging time), append it to this section before the session ends. Keep entries concise and actionable — focus on the "what went wrong" and "how to avoid it" pattern used below.
+
+**Bloat check**: If this file exceeds ~300 lines, notify the user so we can trim outdated or redundant entries together.
+
 ### API field naming: snake_case in API, camelCase in TypeScript
 - The edge creation endpoint expects `source_id` / `target_id` (snake_case)
 - Drizzle schema and shared types use `sourceId` / `targetId` (camelCase)

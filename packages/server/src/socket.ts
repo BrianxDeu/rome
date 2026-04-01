@@ -20,7 +20,13 @@ let io: SocketServer | null = null;
 
 export function setupSocket(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
-    cors: { origin: "*" },
+    cors: {
+      origin: [
+        process.env["CLIENT_URL"] || "http://localhost:5173",
+        "https://rome-production.up.railway.app",
+      ],
+      credentials: true,
+    },
   });
 
   io.use((socket, next) => {

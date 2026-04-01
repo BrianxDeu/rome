@@ -2,7 +2,13 @@ import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import type { AuthPayload } from "@rome/shared";
 
-const JWT_SECRET = process.env["JWT_SECRET"] || "rome-dev-secret";
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
+}
+
+const JWT_SECRET: string = requireEnv("JWT_SECRET");
 
 export function getJwtSecret(): string {
   return JWT_SECRET;

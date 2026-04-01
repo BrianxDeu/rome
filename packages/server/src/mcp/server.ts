@@ -10,6 +10,8 @@ import { type Request, type Response, type RequestHandler } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
+import type { AuthPayload } from "@rome/shared";
 import type { Db } from "../db.js";
 import {
   getGraph,
@@ -20,6 +22,7 @@ import {
   generateStatusReport,
 } from "../services.js";
 import { broadcast } from "../socket.js";
+import { getJwtSecret } from "../middleware/auth.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -35,7 +38,7 @@ const textContent = (text: string) => ({ type: "text" as const, text });
 
 // Creates a fresh McpServer instance with all tools registered.
 // Each session needs its own server (the SDK binds one transport per server).
-function createMcpServer(db: Db): McpServer {
+function createMcpServer(db: Db, userId: string): McpServer {
   const mcp = new McpServer(
     { name: "rome-mcp", version: "1.0.0" },
     { capabilities: { tools: {} } },
@@ -164,7 +167,7 @@ function createMcpServer(db: Db): McpServer {
             end_date: args.end_date,
             budget: args.budget,
           },
-          MCP_SERVICE_USER_ID,
+          userId,
         );
 
         // 3. Broadcast node creation
@@ -176,7 +179,7 @@ function createMcpServer(db: Db): McpServer {
           const edgeResult = createEdge(
             db,
             { source_id: parentId, target_id: node.id, type: "parent_of" },
-            MCP_SERVICE_USER_ID,
+            userId,
           );
           // createEdge returns EdgeRecord | { error, code }
           if ("error" in edgeResult) {
@@ -331,7 +334,7 @@ function createMcpServer(db: Db): McpServer {
             priority: args.priority ?? "P1",
             status: "not_started",
           },
-          MCP_SERVICE_USER_ID,
+          userId,
         );
         broadcast({ type: "node:created", payload: node as unknown as Record<string, unknown> });
 
@@ -467,16 +470,9 @@ export function createMcpHandler(db: Db): RequestHandler {
   const handler: RequestHandler = async (req: Request, res: Response) => {
     console.log(`[MCP] ${req.method} ${req.url}`);
 
-    // --- Auth check ---
-    const authToken = process.env.MCP_AUTH_TOKEN;
-    if (!authToken) {
-      res.status(401).json({ error: "MCP_AUTH_TOKEN not configured on server" });
-      return;
-    }
-
+    // --- Auth check: validate per-session JWT ---
     const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${authToken}`) {
-      // MCP spec: 401 must include WWW-Authenticate with resource_metadata pointing to PRM
+    if (!authHeader?.startsWith("Bearer ")) {
       const proto = req.get("x-forwarded-proto") || req.protocol;
       const base = `${proto}://${req.get("host")}`;
       res.setHeader(
@@ -484,6 +480,33 @@ export function createMcpHandler(db: Db): RequestHandler {
         `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
       );
       res.status(401).json({ error: "Invalid or missing bearer token" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    // Accept either a JWT (new per-session tokens) or the static MCP_AUTH_TOKEN (legacy)
+    const authToken = process.env.MCP_AUTH_TOKEN;
+    let tokenValid = false;
+    if (authToken && token === authToken) {
+      tokenValid = true; // Legacy static token
+    } else {
+      try {
+        const { getJwtSecret } = await import("../middleware/auth.js");
+        const jwt = await import("jsonwebtoken");
+        jwt.default.verify(token, getJwtSecret());
+        tokenValid = true;
+      } catch {
+        // JWT verification failed
+      }
+    }
+    if (!tokenValid) {
+      const proto = req.get("x-forwarded-proto") || req.protocol;
+      const base = `${proto}://${req.get("host")}`;
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+      );
+      res.status(401).json({ error: "Invalid or expired bearer token" });
       return;
     }
 
@@ -499,8 +522,24 @@ export function createMcpHandler(db: Db): RequestHandler {
       return;
     }
 
+    // Extract user identity from JWT bearer token if possible
+    let userId = MCP_SERVICE_USER_ID;
+    const bearerToken = authHeader?.replace("Bearer ", "");
+    if (bearerToken) {
+      try {
+        const payload = jwt.verify(bearerToken, getJwtSecret()) as AuthPayload;
+        if (payload.userId) {
+          userId = payload.userId;
+          console.log(`[MCP] Authenticated as user ${userId}`);
+        }
+      } catch {
+        // Token is not a JWT (e.g. static MCP_AUTH_TOKEN) — fall back to service user
+        console.log("[MCP] Bearer token is not a JWT, using service user fallback");
+      }
+    }
+
     try {
-      const mcp = createMcpServer(db);
+      const mcp = createMcpServer(db, userId);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

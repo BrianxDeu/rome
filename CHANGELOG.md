@@ -2,6 +2,28 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.4.1.0] - 2026-03-31 — Security Hardening
+
+Locks down auth, OAuth, and MCP for production use. JWT secret fallback removed (server requires env var). Login rate limiting active. Registration gated by env var. OAuth validates redirect URIs and issues per-session JWTs. MCP accepts both new JWTs and legacy static tokens. Socket.IO CORS restricted to production domain. npm audit vulnerabilities patched.
+
+### Changed
+- JWT secret fallback `"rome-dev-secret"` removed, server fails fast if `JWT_SECRET` env var is missing
+- Admin seed password randomized via `crypto.randomBytes` instead of hardcoded `password123`
+- OAuth `/oauth/token` issues per-session JWTs (1h expiry) instead of returning static `MCP_AUTH_TOKEN`
+- OAuth `/oauth/authorize` validates `redirect_uri` against registered client URIs
+- MCP auth accepts both per-session JWTs and legacy `MCP_AUTH_TOKEN` for backwards compatibility
+- Socket.IO CORS restricted from `*` to production domain + localhost
+- Vite proxy port configurable via `API_PORT` env var
+
+### Added
+- Rate limiting on `/api/auth/login` and `/api/auth/register` (10 attempts per 15 minutes)
+- Registration gate via `REGISTRATION_ENABLED` env var (defaults to disabled)
+- 19 security regression tests covering auth, OAuth, rate limiting, and infrastructure
+- CLAUDE.md self-update rule for Known Gotchas section
+
+### Fixed
+- npm audit: patched `path-to-regexp` (ReDoS) and `brace-expansion` (hang)
+
 ## [0.4.0.0] - 2026-03-30 — Archive View
 
 Completed workstreams now auto-archive after 24 hours, clearing clutter from active views. The new ARCHIVE button shows who completed each task, when, and lets you restore workstreams if work turns out to be incomplete. Accountability for DxD, built in.

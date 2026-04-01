@@ -10,7 +10,9 @@ import { graphRoutes, budgetRoutes } from "./routes/graph.js";
 import { taskRoutes } from "./routes/tasks.js";
 import { archiveRoutes } from "./routes/archive.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { getJwtSecret } from "./middleware/auth.js";
 import { createMcpHandler } from "./mcp/server.js";
+import jwt from "jsonwebtoken";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,13 +67,26 @@ export function createApp(db: Db) {
     });
   });
 
-  // Authorization endpoint — auto-approves and redirects back with a code
+  // Authorization endpoint — auto-approves (MCP clients don't have JWTs), validates redirect_uri
   app.get("/oauth/authorize", (req, res) => {
-    const { redirect_uri, state, code_challenge, code_challenge_method } = req.query;
+    const { redirect_uri, state, code_challenge, code_challenge_method, client_id } = req.query;
     if (!redirect_uri) {
       res.status(400).json({ error: "redirect_uri required" });
       return;
     }
+
+    // Validate redirect_uri against registered client
+    if (client_id) {
+      const clientStore: Map<string, any> = (app as any)._oauthClients ?? new Map();
+      const client = clientStore.get(client_id as string);
+      if (client && client.redirect_uris && client.redirect_uris.length > 0) {
+        if (!client.redirect_uris.includes(redirect_uri as string)) {
+          res.status(400).json({ error: "Invalid redirect_uri" });
+          return;
+        }
+      }
+    }
+
     // Generate a one-time code (just use a random string — we validate client_secret at token exchange)
     const code = Buffer.from(crypto.randomUUID()).toString("base64url");
     // Store code temporarily (in-memory, expires in 5 min)
@@ -80,6 +95,7 @@ export function createApp(db: Db) {
       redirect_uri,
       code_challenge,
       code_challenge_method,
+      userId: req.auth?.userId,
       expires: Date.now() + 5 * 60 * 1000,
     });
     (app as any)._oauthCodes = codeStore;
@@ -139,17 +155,18 @@ export function createApp(db: Db) {
       }
     }
 
-    // The access token IS the MCP_AUTH_TOKEN — Claude will send it as Bearer on MCP requests
-    const authToken = process.env.MCP_AUTH_TOKEN;
-    if (!authToken) {
-      res.status(500).json({ error: "server_error", error_description: "MCP_AUTH_TOKEN not configured" });
-      return;
-    }
+    // Generate a per-session JWT instead of returning a static shared token
+    const jwtSecret = getJwtSecret();
+    const accessToken = jwt.sign(
+      { userId: stored.userId || "mcp-service-user-00000000", scope: "mcp:tools", type: "mcp_access" },
+      jwtSecret,
+      { expiresIn: "1h" },
+    );
 
     res.json({
-      access_token: authToken,
+      access_token: accessToken,
       token_type: "Bearer",
-      expires_in: 604800,
+      expires_in: 3600,
     });
   });
 
