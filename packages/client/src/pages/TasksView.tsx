@@ -151,7 +151,7 @@ export function TasksView() {
   }, [tasks]);
 
   return (
-    <div style={{ maxWidth: 600, margin: "40px auto", padding: "0 20px", fontFamily: "Tomorrow, sans-serif" }}>
+    <div style={{ maxWidth: 600, margin: "0 auto", padding: "40px 20px", fontFamily: "Tomorrow, sans-serif", overflowY: "auto", flex: 1 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 22, fontWeight: 300, color: "#414042", letterSpacing: 1 }}>My Tasks</div>
         <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.5 }}>{dateStr}</div>

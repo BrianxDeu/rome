@@ -2,6 +2,13 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.4.1.1] - 2026-04-03
+
+Tasks view now scrolls when you have more tasks than fit on screen.
+
+### Fixed
+- Tasks view clipped by parent overflow:hidden — added scroll container so long task lists are reachable
+
 ## [0.4.1.0] - 2026-03-31 — Security Hardening
 
 Locks down auth, OAuth, and MCP for production use. JWT secret fallback removed (server requires env var). Login rate limiting active. Registration gated by env var. OAuth validates redirect URIs and issues per-session JWTs. MCP accepts both new JWTs and legacy static tokens. Socket.IO CORS restricted to production domain. npm audit vulnerabilities patched.
