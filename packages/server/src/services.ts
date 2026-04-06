@@ -1,6 +1,6 @@
-import { eq, and, type SQL } from "drizzle-orm";
+import { eq, and, gte, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { nodes, edges } from "@rome/shared/schema";
+import { nodes, edges, auditLog } from "@rome/shared/schema";
 import type { Db } from "./db.js";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +33,8 @@ const createEdgeSchema = z.object({
   target_id: z.string(),
   type: z.enum(["blocks", "blocker", "depends_on", "sequence", "produces", "feeds", "shared", "parent_of"]),
 });
+
+export { createNodeSchema, updateNodeSchema, createEdgeSchema };
 
 export type CreateNodeInput = z.infer<typeof createNodeSchema>;
 export type UpdateNodeInput = z.infer<typeof updateNodeSchema>;
@@ -507,4 +509,250 @@ export function generateStatusReport(
   lines.push("");
 
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// 7. Audit Trail
+// ---------------------------------------------------------------------------
+
+export type AuditLogRecord = typeof auditLog.$inferSelect;
+
+export function writeAuditEntry(
+  db: Db,
+  entry: {
+    toolName: string;
+    userId: string;
+    requestSummary: string;
+    affectedNodeIds: string[];
+    changesJson: Record<string, unknown>;
+    verificationResult?: string;
+  },
+): AuditLogRecord {
+  const id = crypto.randomUUID();
+  // Use SQLite format (space-separated) so gte() comparisons with the `since` filter work correctly
+  const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+
+  db.insert(auditLog)
+    .values({
+      id,
+      toolName: entry.toolName,
+      userId: entry.userId,
+      requestSummary: entry.requestSummary,
+      affectedNodeIds: JSON.stringify(entry.affectedNodeIds),
+      changesJson: JSON.stringify(entry.changesJson),
+      verificationResult: entry.verificationResult ?? "pass",
+      createdAt: now,
+    })
+    .run();
+
+  return db.select().from(auditLog).where(eq(auditLog.id, id)).get()!;
+}
+
+export function queryAuditTrail(
+  db: Db,
+  filters?: {
+    since?: string;
+    tool_name?: string;
+    user_id?: string;
+    node_id?: string;
+    limit?: number;
+  },
+): AuditLogRecord[] {
+  const conditions: SQL[] = [];
+
+  if (filters?.since) {
+    const normalized = filters.since.replace("T", " ").replace(/\.\d+Z$/, "").replace("Z", "");
+    conditions.push(gte(auditLog.createdAt, normalized));
+  }
+  if (filters?.tool_name) {
+    conditions.push(eq(auditLog.toolName, filters.tool_name));
+  }
+  if (filters?.user_id) {
+    conditions.push(eq(auditLog.userId, filters.user_id));
+  }
+
+  // For node_id filter: use SQLite LIKE to pre-filter before fetching rows, then apply limit
+  // This prevents loading the entire table into memory just to filter by one field
+  if (filters?.node_id) {
+    const escaped = filters.node_id.replace(/[%_]/g, "\\$&");
+    conditions.push(
+      sql`${auditLog.affectedNodeIds} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as SQL,
+    );
+  }
+
+  let query = db.select().from(auditLog);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as typeof query;
+  }
+
+  const limit = filters?.limit ?? 50;
+  const results = query.orderBy(auditLog.createdAt).all().reverse().slice(0, limit);
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// 8. Execute Plan
+// ---------------------------------------------------------------------------
+
+const executePlanOperationSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("update"),
+    nodeId: z.string(),
+    fields: updateNodeSchema,
+  }),
+  z.object({
+    action: z.literal("create"),
+    fields: createNodeSchema,
+  }),
+  z.object({
+    action: z.literal("create_edge"),
+    fields: createEdgeSchema,
+  }),
+]);
+
+const executePlanSchema = z.object({
+  operations: z.array(executePlanOperationSchema).min(1).max(50),
+  verify: z.boolean().default(true),
+});
+
+export type ExecutePlanInput = z.infer<typeof executePlanSchema>;
+export { executePlanSchema };
+
+export interface PlanReceipt {
+  index: number;
+  action: string;
+  status: "success" | "error";
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  newId?: string;
+  error?: string;
+}
+
+export interface ExecutePlanResult {
+  receipts: PlanReceipt[];
+  verification: "pass" | "skipped" | "mismatch_rolled_back";
+  auditId: string;
+}
+
+export function executePlan(
+  db: Db,
+  sqlite: import("better-sqlite3").Database,
+  input: ExecutePlanInput,
+  userId: string,
+): ExecutePlanResult {
+  const receipts: PlanReceipt[] = [];
+  const createdNameToId = new Map<string, string>();
+  const affectedNodeIds: string[] = [];
+  const broadcastQueue: Array<{ type: string; payload: Record<string, unknown> }> = [];
+
+  const run = sqlite.transaction(() => {
+    for (let i = 0; i < input.operations.length; i++) {
+      const op = input.operations[i]!;
+
+      try {
+        if (op.action === "update") {
+          const before = db.select().from(nodes).where(eq(nodes.id, op.nodeId)).get();
+          if (!before) {
+            receipts.push({ index: i, action: "update", status: "error", error: "Node not found" });
+            continue;
+          }
+          const after = updateNode(db, op.nodeId, op.fields, userId);
+          affectedNodeIds.push(op.nodeId);
+          broadcastQueue.push({ type: "node:updated", payload: after as unknown as Record<string, unknown> });
+          receipts.push({
+            index: i,
+            action: "update",
+            status: "success",
+            before: before as unknown as Record<string, unknown>,
+            after: after as unknown as Record<string, unknown>,
+          });
+        } else if (op.action === "create") {
+          const node = createNode(db, op.fields, userId);
+          createdNameToId.set(node.name, node.id);
+          affectedNodeIds.push(node.id);
+          broadcastQueue.push({ type: "node:created", payload: node as unknown as Record<string, unknown> });
+          receipts.push({
+            index: i,
+            action: "create",
+            status: "success",
+            before: null,
+            after: node as unknown as Record<string, unknown>,
+            newId: node.id,
+          });
+        } else if (op.action === "create_edge") {
+          let sourceId = op.fields.source_id;
+          let targetId = op.fields.target_id;
+
+          // Resolve names to IDs for nodes created earlier in this plan
+          if (createdNameToId.has(sourceId)) sourceId = createdNameToId.get(sourceId)!;
+          if (createdNameToId.has(targetId)) targetId = createdNameToId.get(targetId)!;
+
+          const edgeResult = createEdge(db, { source_id: sourceId, target_id: targetId, type: op.fields.type }, userId);
+          if ("error" in edgeResult) {
+            receipts.push({ index: i, action: "create_edge", status: "error", error: edgeResult.error });
+            continue;
+          }
+          affectedNodeIds.push(sourceId, targetId);
+          broadcastQueue.push({ type: "edge:created", payload: edgeResult as unknown as Record<string, unknown> });
+          receipts.push({
+            index: i,
+            action: "create_edge",
+            status: "success",
+            before: null,
+            after: edgeResult as unknown as Record<string, unknown>,
+          });
+        }
+      } catch (err) {
+        receipts.push({ index: i, action: op.action, status: "error", error: String(err) });
+      }
+    }
+
+    // Verification step
+    if (input.verify) {
+      for (const receipt of receipts) {
+        if (receipt.status !== "success") continue;
+        if (receipt.action === "update" || receipt.action === "create") {
+          const nodeId = receipt.action === "create" ? receipt.newId! : (receipt.after as Record<string, unknown>)?.id as string;
+          const current = db.select().from(nodes).where(eq(nodes.id, nodeId)).get();
+          if (!current) {
+            // Verification failed: node should exist but doesn't
+            throw new Error(`VERIFICATION_MISMATCH: node ${nodeId} not found after write`);
+          }
+        }
+      }
+    }
+  });
+
+  // Execute the transaction (IMMEDIATE prevents interleaving of concurrent plans)
+  let verification: "pass" | "skipped" | "mismatch_rolled_back" = input.verify ? "pass" : "skipped";
+  try {
+    run.immediate();
+  } catch (err) {
+    if (String(err).includes("VERIFICATION_MISMATCH")) {
+      verification = "mismatch_rolled_back";
+      // Write audit entry OUTSIDE the rolled-back transaction
+      const auditEntry = writeAuditEntry(db, {
+        toolName: "rome_execute_plan",
+        userId,
+        requestSummary: `Plan with ${input.operations.length} operations — ROLLED BACK (verification failure)`,
+        affectedNodeIds: [],
+        changesJson: { operations: input.operations, error: String(err) },
+        verificationResult: "mismatch_rolled_back",
+      });
+      return { receipts: receipts.map(r => ({ ...r, status: "error" as const, error: r.error ?? "Rolled back due to verification failure" })), verification, auditId: auditEntry.id };
+    }
+    throw err;
+  }
+
+  // Write audit entry for successful execution
+  const auditEntry = writeAuditEntry(db, {
+    toolName: "rome_execute_plan",
+    userId,
+    requestSummary: `Plan with ${input.operations.length} operations — ${receipts.filter(r => r.status === "success").length} succeeded`,
+    affectedNodeIds: [...new Set(affectedNodeIds)],
+    changesJson: { receipts },
+    verificationResult: verification,
+  });
+
+  return { receipts, verification, auditId: auditEntry.id, _broadcastQueue: broadcastQueue } as ExecutePlanResult & { _broadcastQueue: typeof broadcastQueue };
 }

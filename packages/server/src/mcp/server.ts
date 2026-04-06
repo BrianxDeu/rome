@@ -1,11 +1,14 @@
 /**
  * Rome MCP Server — Streamable HTTP transport mounted at /mcp
  *
- * Exposes 4 tools: rome_get_graph, rome_create_task, rome_update_task, rome_status_report
+ * Exposes 9 tools: rome_get_graph, rome_create_task, rome_update_node,
+ * rome_create_node_group, rome_create_edge, rome_status_report,
+ * rome_execute_plan, rome_audit_trail
  * Auth: Bearer token checked against MCP_AUTH_TOKEN env var
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type BetterSqlite3 from "better-sqlite3";
 import { type Request, type Response, type RequestHandler } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -20,6 +23,10 @@ import {
   createEdge,
   resolveNodeByName,
   generateStatusReport,
+  writeAuditEntry,
+  queryAuditTrail,
+  executePlan,
+  executePlanSchema,
 } from "../services.js";
 import { broadcast } from "../socket.js";
 import { getJwtSecret } from "../middleware/auth.js";
@@ -38,7 +45,7 @@ const textContent = (text: string) => ({ type: "text" as const, text });
 
 // Creates a fresh McpServer instance with all tools registered.
 // Each session needs its own server (the SDK binds one transport per server).
-function createMcpServer(db: Db, userId: string): McpServer {
+function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string): McpServer {
   const mcp = new McpServer(
     { name: "rome-mcp", version: "1.0.0" },
     { capabilities: { tools: {} } },
@@ -47,7 +54,7 @@ function createMcpServer(db: Db, userId: string): McpServer {
   // ---- Tool 1: rome_get_graph ------------------------------------------------
   mcp.tool(
     "rome_get_graph",
-    "Returns the full project graph — all nodes with statuses, owners, priorities, dates, budgets, RACI, and all edges. Use this to understand the current state of the project.",
+    "Returns the full project graph — all nodes with statuses, owners, priorities, dates, budgets, RACI, and all edges. Use this to understand the current state of the project.\n\n**Brain dump workflow:** When the user gives you a freeform update (meeting notes, status changes, new tasks), call this tool FIRST to get all existing nodes. Then match the user's updates against existing nodes using your language understanding — find semantic matches, not just string matches. Present a plan showing which nodes you'll UPDATE vs CREATE. Only after the user confirms, call rome_execute_plan to execute all changes in a single verified transaction.",
     {
       workstream: z.string().optional(),
       status: z.string().optional(),
@@ -201,6 +208,15 @@ function createMcpServer(db: Db, userId: string): McpServer {
           broadcast({ type: "edge:created", payload: edge });
         }
 
+        // Audit log
+        writeAuditEntry(db, {
+          toolName: "rome_create_task",
+          userId,
+          requestSummary: `Created task "${args.name}"${args.workstream ? ` in ${args.workstream}` : ""}`,
+          affectedNodeIds: [node.id],
+          changesJson: { before: null, after: node },
+        });
+
         return {
           content: [
             textContent(JSON.stringify({ node, edge: edge ?? null }, null, 2)),
@@ -285,6 +301,15 @@ function createMcpServer(db: Db, userId: string): McpServer {
           };
         }
 
+        // Audit log
+        writeAuditEntry(db, {
+          toolName: "rome_update_node",
+          userId,
+          requestSummary: `Updated node "${result.node.name}" (${nodeId})`,
+          affectedNodeIds: [nodeId],
+          changesJson: { before: result.node, after: updated },
+        });
+
         broadcast({ type: "node:updated", payload: updated as unknown as Record<string, unknown> });
         return { content: [textContent(JSON.stringify(updated, null, 2))] };
       } catch (err) {
@@ -349,6 +374,15 @@ function createMcpServer(db: Db, userId: string): McpServer {
         if (!("error" in producesEdge)) {
           broadcast({ type: "edge:created", payload: producesEdge as unknown as Record<string, unknown> });
         }
+
+        // Audit log
+        writeAuditEntry(db, {
+          toolName: "rome_create_node_group",
+          userId,
+          requestSummary: `Created node group "${args.name}" under "${args.workstream}"`,
+          affectedNodeIds: [node.id, wsHeader.id],
+          changesJson: { before: null, after: { node, parent_edge: parentEdge, produces_edge: producesEdge } },
+        });
 
         return {
           content: [textContent(JSON.stringify({ node, parent_edge: parentEdge, produces_edge: producesEdge }, null, 2))],
@@ -415,6 +449,15 @@ function createMcpServer(db: Db, userId: string): McpServer {
           };
         }
 
+        // Audit log
+        writeAuditEntry(db, {
+          toolName: "rome_create_edge",
+          userId,
+          requestSummary: `Created ${args.type} edge: "${srcResult.node.name}" → "${tgtResult.node.name}"`,
+          affectedNodeIds: [sourceId, targetId],
+          changesJson: { before: null, after: edge },
+        });
+
         broadcast({ type: "edge:created", payload: edge as unknown as Record<string, unknown> });
         return {
           content: [textContent(JSON.stringify({
@@ -459,6 +502,83 @@ function createMcpServer(db: Db, userId: string): McpServer {
     },
   );
 
+  // ---- Tool 7: rome_execute_plan -----------------------------------------------
+  mcp.tool(
+    "rome_execute_plan",
+    "Executes a batch of create/update/create_edge operations in a single transaction. Use this after calling rome_get_graph and presenting a plan to the user. Returns per-operation receipts with before/after values. Individual operation errors are captured in receipts but don't abort the remaining operations. If self-verification detects a data mismatch after all operations complete, the entire transaction is rolled back automatically.",
+    {
+      operations: z.array(z.object({
+        action: z.enum(["update", "create", "create_edge"]),
+        nodeId: z.string().optional(),
+        fields: z.record(z.string(), z.any()),
+      })).min(1).max(50),
+      verify: z.boolean().default(true),
+    },
+    async (args) => {
+      try {
+        // Re-parse with discriminated union for proper validation
+        const parsed = executePlanSchema.parse(args as unknown);
+        const result = executePlan(db, sqlite, parsed, userId);
+
+        // Broadcast events after successful commit (deferred)
+        const broadcastQueue = (result as unknown as { _broadcastQueue?: Array<{ type: string; payload: Record<string, unknown> }> })._broadcastQueue;
+        if (broadcastQueue && result.verification !== "mismatch_rolled_back") {
+          for (const event of broadcastQueue) {
+            broadcast(event as import("../socket.js").RomeEvent);
+          }
+        }
+
+        return {
+          content: [textContent(JSON.stringify({
+            receipts: result.receipts,
+            verification: result.verification,
+            auditId: result.auditId,
+            summary: `${result.receipts.filter(r => r.status === "success").length}/${result.receipts.length} operations succeeded`,
+          }, null, 2))],
+          isError: result.verification === "mismatch_rolled_back",
+        };
+      } catch (err) {
+        console.error("[MCP] tool error:", err);
+        return {
+          content: [textContent(JSON.stringify({ error: "execute_plan_failed", details: String(err) }))],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---- Tool 8: rome_audit_trail -----------------------------------------------
+  mcp.tool(
+    "rome_audit_trail",
+    "Queries the audit log of all MCP write operations. Use this to answer 'what changed today?', 'who modified the budget for X?', or 'show me recent changes'. Every create, update, and edge operation is logged with before/after values.",
+    {
+      since: z.string().optional().describe("Filter entries after this timestamp (ISO or SQLite format)"),
+      tool_name: z.string().optional().describe("Filter by tool name (e.g. rome_update_node)"),
+      user_id: z.string().optional().describe("Filter by user ID"),
+      node_id: z.string().optional().describe("Filter by affected node ID"),
+      limit: z.number().optional().describe("Max entries to return (default 50)"),
+    },
+    async (args) => {
+      try {
+        // Default to caller's own userId to prevent cross-user data exposure
+        const scopedArgs = { ...args, user_id: args.user_id ?? userId };
+        const entries = queryAuditTrail(db, scopedArgs);
+        return {
+          content: [textContent(JSON.stringify({
+            entries,
+            total: entries.length,
+          }, null, 2))],
+        };
+      } catch (err) {
+        console.error("[MCP] tool error:", err);
+        return {
+          content: [textContent(JSON.stringify({ error: "audit_trail_failed", details: String(err) }))],
+          isError: true,
+        };
+      }
+    },
+  );
+
   return mcp;
 }
 
@@ -466,7 +586,7 @@ function createMcpServer(db: Db, userId: string): McpServer {
 // Express Handler Factory
 // ---------------------------------------------------------------------------
 
-export function createMcpHandler(db: Db): RequestHandler {
+export function createMcpHandler(db: Db, sqlite: BetterSqlite3.Database): RequestHandler {
   const handler: RequestHandler = async (req: Request, res: Response) => {
     console.log(`[MCP] ${req.method} ${req.url}`);
 
@@ -539,7 +659,7 @@ export function createMcpHandler(db: Db): RequestHandler {
     }
 
     try {
-      const mcp = createMcpServer(db, userId);
+      const mcp = createMcpServer(db, sqlite, userId);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

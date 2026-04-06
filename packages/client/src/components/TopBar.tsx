@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 
-export type ViewTab = "tasks" | "board" | "graph" | "gantt" | "budget" | "archive";
+export type ViewTab = "tasks" | "board" | "graph" | "gantt" | "budget" | "kanban" | "archive";
 
 interface TopBarProps {
   activeView: ViewTab;
@@ -11,7 +11,7 @@ interface TopBarProps {
   onAddWorkstream?: () => void;
 }
 
-const tabs: ViewTab[] = ["tasks", "board", "graph", "gantt", "budget"];
+const tabs: ViewTab[] = ["tasks", "board", "graph", "gantt", "budget", "kanban"];
 
 export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, onAddWorkstream }: TopBarProps) {
   const user = useAuthStore((s) => s.user);

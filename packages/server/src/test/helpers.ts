@@ -13,7 +13,7 @@ export function createTestContext(): { db: ReturnType<typeof drizzle<typeof sche
   sqlite.pragma("foreign_keys = ON");
   const db = drizzle(sqlite, { schema });
   initTables(sqlite);
-  const app = createApp(db);
+  const app = createApp(db, sqlite);
   return { db, sqlite, app };
 }
 

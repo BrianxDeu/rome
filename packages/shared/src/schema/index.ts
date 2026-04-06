@@ -26,6 +26,7 @@ export const nodes = sqliteTable("nodes", {
   y: real("y"),
   positionPinned: integer("position_pinned").default(0),
   sortOrder: integer("sort_order"),
+  kanbanSortOrder: integer("kanban_sort_order"),
   attachments: text("attachments"),
   completedBy: text("completed_by"),
   completedAt: text("completed_at"),
@@ -51,6 +52,17 @@ export const edges = sqliteTable("edges", {
     .references(() => users.id),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+});
+
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(),
+  toolName: text("tool_name").notNull(),
+  userId: text("user_id").notNull(),
+  requestSummary: text("request_summary").notNull(),
+  affectedNodeIds: text("affected_node_ids").notNull().default("[]"),
+  changesJson: text("changes_json").notNull(),
+  verificationResult: text("verification_result").notNull().default("pending"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const personalTasks = sqliteTable("personal_tasks", {

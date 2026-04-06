@@ -66,6 +66,17 @@ export function initTables(sqlite: BetterSqlite3.Database) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_personal_tasks_user ON personal_tasks(user_id);
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      tool_name TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      request_summary TEXT NOT NULL,
+      affected_node_ids TEXT NOT NULL DEFAULT '[]',
+      changes_json TEXT NOT NULL,
+      verification_result TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Migrations — idempotent ALTER TABLE additions
@@ -86,6 +97,11 @@ export function initTables(sqlite: BetterSqlite3.Database) {
   }
   try {
     sqlite.exec(`ALTER TABLE nodes ADD COLUMN archived_at TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+  try {
+    sqlite.exec(`ALTER TABLE nodes ADD COLUMN kanban_sort_order INTEGER`);
   } catch {
     // Column already exists — ignore
   }

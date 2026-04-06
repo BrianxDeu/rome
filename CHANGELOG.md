@@ -2,6 +2,24 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.5.0.0] - 2026-04-03
+
+Two new capabilities: a Kanban board view and an AI-native write pipeline via MCP. You can now move tasks between status columns with drag-and-drop, and tell Claude to update the project graph in bulk — with transactional guarantees, receipts, and a full audit trail.
+
+### Added
+- **Kanban view** — new tab showing tasks organized into Not Started / In Progress / Blocked / Done columns. Drag cards between columns to change status, drag within a column to reorder. Sidebar filters by workstream and node group. Sort order persists to the database.
+- **`rome_execute_plan` MCP tool** — execute a batch of create/update/edge operations in a single BEGIN IMMEDIATE transaction. Returns per-operation receipts with before/after values. Self-verifies after commit; rolls back the entire transaction if verification fails.
+- **`rome_audit_trail` MCP tool** — query a persistent log of all MCP write operations. Filter by timestamp, tool name, user, or node ID. Answers "what changed today?" in under 2 seconds.
+- **Audit logging on existing MCP tools** — `rome_create_task`, `rome_update_node`, `rome_create_node_group`, `rome_create_edge` now write audit entries on every call.
+- **Brain dump workflow** — `rome_get_graph` description updated to guide Claude through the full brain-dump flow: get graph → semantic match → present plan → execute via `rome_execute_plan`.
+- **`audit_log` table** — new SQLite table storing tool name, user, affected node IDs, before/after JSON, verification result, and timestamp.
+
+### Fixed
+- `rome_audit_trail` scoped to caller's own user by default (prevents cross-user data exposure)
+- `audit_log` timestamps stored in SQLite format so `since` filter comparisons work correctly
+- Kanban drag-over border artifact on cancelled drags (Escape key now cleans up indicators)
+- Kanban partial persist failure triggers graph refetch to reconcile optimistic state
+
 ## [0.4.1.1] - 2026-04-03
 
 Tasks view now scrolls when you have more tasks than fit on screen.

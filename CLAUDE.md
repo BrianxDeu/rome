@@ -209,26 +209,28 @@ npm run test --workspace=packages/server
 - The `/ship` workflow runs tests, code review, and adversarial review that catch bugs localhost misses
 - Direct-to-main pushes skip all safety checks and have caused production bugs
 
-## Current State (v0.3.0.0, 2026-03-27)
+## Current State (v0.5.0.0, 2026-04-03)
 
 ### What's Built
-- **5 views**: Tasks (default landing), Board, Graph (custom SVG), Gantt (bars + today line), Budget (hero + tables)
-- **Tasks**: Per-user private task list with P0-P3 priority, auto-delete 60s after checking off, Socket.IO cross-tab sync
+- **6 views**: Tasks (default landing), Board, Graph (custom SVG), Gantt (bars + today line), Budget (hero + tables), Kanban (status columns + drag-and-drop)
+- **Tasks**: Per-user private task list with P0-P3 priority, auto-delete 2 min after checking off, Socket.IO cross-tab sync
 - **Board**: Node groups (cluster sub-headers), drag-and-drop within/between groups, inline card editing, add node/add node group, delete workstream, delete confirmation dialogs
 - **Graph**: Collapsible cluster nodes, workstream dashed boxes, selection dimming, edge lines, pan/zoom, FIT button
 - **Gantt**: 4 time scales (week/month/quarter/year), colored bars by priority, today line, detail panel
 - **Budget**: Hero total, workstream bar chart, priority table (respects workstream filter), sortable/filterable items table with inline budget editing
+- **Kanban**: Status columns (Not Started / In Progress / Blocked / Done), drag cards between columns to change status, drag within column to reorder, sidebar filters by workstream and node group, sort order persists to DB
 - **Detail Panel**: RACI (4 fields), dependency management (add/remove edges), status/priority/dates/budget editing
-- **TopBar**: DXD HALO OPS branding, Tasks/Board/Graph/Gantt/Budget tabs, +NODE/+GROUP/+STREAM/SHARE/LOGOUT buttons
+- **TopBar**: DXD HALO OPS branding, Tasks/Board/Graph/Gantt/Budget/Kanban tabs, +NODE/+GROUP/+STREAM/SHARE/LOGOUT buttons
 - **API**: Full CRUD for nodes/edges/personal tasks, graph endpoint, budget rollup, auth (JWT), Socket.IO real-time sync with per-user rooms
-- **MCP**: 6 tools (rome_get_graph, rome_create_task, rome_create_node_group, rome_create_edge, rome_update_node, rome_status_report), OAuth auth, error boundary, request logging
+- **MCP**: 8 tools (rome_get_graph, rome_create_task, rome_create_node_group, rome_create_edge, rome_update_node, rome_status_report, rome_execute_plan, rome_audit_trail), OAuth auth, error boundary, request logging, audit trail on all write tools
 - **Deployment**: Live at rome-production.up.railway.app, auto-deploy on push to main
 
 ### Data Model
-- `nodes` table: workstream headers, node groups, leaf task nodes
+- `nodes` table: workstream headers, node groups, leaf task nodes; includes `kanban_sort_order` column
 - `edges` table: parent_of, blocks, blocker, depends_on, sequence, produces, feeds, shared (cascade delete on edges)
 - `personal_tasks` table: per-user ephemeral tasks with priority and auto-cleanup
 - `users` table: JWT auth with login/register
+- `audit_log` table: persistent MCP write log (tool_name, user_id, affected_node_ids JSON, changes_json, verification_result, created_at)
 - Parent-child hierarchy: workstream header → node group → leaf nodes (via parent_of edges)
 - RACI stored as JSON in `raci` field — parseRaci() handles both short (R/A/C/I) and full keys, plus arrays
 - Workstream rename cascades: server PATCH updates children's `workstream` field automatically

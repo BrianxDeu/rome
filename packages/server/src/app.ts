@@ -2,6 +2,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import express from "express";
+import type BetterSqlite3 from "better-sqlite3";
 import type { Db } from "./db.js";
 import { authRoutes } from "./routes/auth.js";
 import { nodeRoutes } from "./routes/nodes.js";
@@ -16,7 +17,7 @@ import jwt from "jsonwebtoken";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export function createApp(db: Db) {
+export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
   const app = express();
 
   app.use(express.json());
@@ -171,15 +172,17 @@ export function createApp(db: Db) {
   });
 
   // MCP endpoint — mounted BEFORE static middleware so /mcp isn't caught by SPA catch-all
-  const mcpHandler = createMcpHandler(db);
-  app.all(["/mcp", "/mcp/*"], (req, res, next) => {
-    Promise.resolve(mcpHandler(req, res, next)).catch((err) => {
-      console.error("[MCP] Unhandled error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "MCP handler error" });
-      }
+  const mcpHandler = sqlite ? createMcpHandler(db, sqlite) : undefined;
+  if (mcpHandler) {
+    app.all(["/mcp", "/mcp/*"], (req, res, next) => {
+      Promise.resolve(mcpHandler(req, res, next)).catch((err) => {
+        console.error("[MCP] Unhandled error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "MCP handler error" });
+        }
+      });
     });
-  });
+  }
 
   // Serve static client assets in production
   const clientDist = process.env["CLIENT_DIST"] || path.resolve(__dirname, "../../client/dist");

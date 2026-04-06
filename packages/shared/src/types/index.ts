@@ -28,6 +28,7 @@ export interface Node {
   y: number | null;
   positionPinned: number | null;
   sortOrder: number | null;
+  kanbanSortOrder: number | null;
   attachments: string | null;
   completedBy: string | null;
   completedAt: string | null;

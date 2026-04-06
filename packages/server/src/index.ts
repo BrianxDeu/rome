@@ -12,7 +12,7 @@ const { db, sqlite } = createDb(dbPath);
 initTables(sqlite);
 await seedDb(db);
 
-const app = createApp(db);
+const app = createApp(db, sqlite);
 const httpServer = createServer(app);
 setupSocket(httpServer);
 

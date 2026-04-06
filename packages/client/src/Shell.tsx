@@ -9,6 +9,7 @@ import { BudgetView } from "./pages/BudgetView";
 import { GanttView } from "./pages/GanttView";
 import { GraphView } from "./pages/GraphView";
 import { TasksView } from "./pages/TasksView";
+import { KanbanView } from "./pages/KanbanView";
 import { NodePanel } from "./components/NodePanel";
 import { useSync } from "./hooks/useSync";
 import { useGraph } from "./hooks/useGraph";
@@ -72,12 +73,14 @@ export function Shell() {
           <GanttView />
         ) : activeView === "budget" ? (
           <BudgetView />
+        ) : activeView === "kanban" ? (
+          <KanbanView />
         ) : activeView === "archive" ? (
           <ArchiveView />
         ) : (
           <GraphView />
         )}
-        {(activeView === "graph" || activeView === "gantt" || activeView === "board" || activeView === "archive") && selectedNode && <NodePanel />}
+        {(activeView === "graph" || activeView === "gantt" || activeView === "board" || activeView === "kanban" || activeView === "archive") && selectedNode && <NodePanel />}
       </div>
 
       {addNodeModal.open && (
