@@ -45,6 +45,16 @@ export function useSync() {
       }).catch(console.error);
     });
 
+    // Refetch graph on reconnect to catch any changes missed while disconnected
+    socket.on("connect", () => {
+      if (socketRef.current) {
+        api<{ nodes: Node[]; edges: Edge[] }>("/graph").then(({ nodes, edges }) => {
+          useGraphStore.getState().setNodes(nodes);
+          useGraphStore.getState().setEdges(edges);
+        }).catch(console.error);
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

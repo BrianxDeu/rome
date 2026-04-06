@@ -2,6 +2,15 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.5.1.1] - 2026-04-06
+
+Three fixes from QA sprint: cascade-delete children when deleting a parent node (prevents orphans), MCP tools now use the authenticated user ID instead of a hardcoded service account, and Socket.IO reconnects automatically refetch the graph to prevent stale state.
+
+### Fixed
+- Deleting a node now cascade-deletes all descendant nodes (children, grandchildren) via parent_of edges, preventing orphaned nodes
+- MCP tools (`rome_update_node`, `rome_create_edge`, `rome_create_node_group`) now use the authenticated userId from the JWT instead of hardcoded `mcp-service-user-00000000`
+- Socket.IO reconnects now trigger a full graph refetch so clients don't see stale data after network interruptions
+
 ## [0.5.1.0] - 2026-04-06
 
 Visual overhaul targeting the shadcn Luma aesthetic. Every view now renders in Montserrat on a warm stone background with white floating cards. The font is controlled by a single CSS variable, so switching fonts is a one-line change.

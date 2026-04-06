@@ -146,19 +146,25 @@ describe("DELETE /api/nodes/:id", () => {
     expect(get.status).toBe(404);
   });
 
-  it("orphans children when parent is deleted (does not cascade delete child nodes)", async () => {
+  it("cascade-deletes children when parent is deleted", async () => {
     const parent = await request(ctx.app).post("/api/nodes").set("Authorization", `Bearer ${token}`).send({ name: "Parent" });
     const child = await request(ctx.app).post("/api/nodes").set("Authorization", `Bearer ${token}`).send({ name: "Child" });
+    const grandchild = await request(ctx.app).post("/api/nodes").set("Authorization", `Bearer ${token}`).send({ name: "Grandchild" });
     await request(ctx.app)
       .post("/api/edges")
       .set("Authorization", `Bearer ${token}`)
       .send({ source_id: parent.body.id, target_id: child.body.id, type: "parent_of" });
+    await request(ctx.app)
+      .post("/api/edges")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ source_id: child.body.id, target_id: grandchild.body.id, type: "parent_of" });
 
     await request(ctx.app).delete(`/api/nodes/${parent.body.id}`).set("Authorization", `Bearer ${token}`);
 
     const childGet = await request(ctx.app).get(`/api/nodes/${child.body.id}`).set("Authorization", `Bearer ${token}`);
-    expect(childGet.status).toBe(200);
-    expect(childGet.body.name).toBe("Child");
-    expect(childGet.body.edges).toHaveLength(0);
+    expect(childGet.status).toBe(404);
+
+    const grandchildGet = await request(ctx.app).get(`/api/nodes/${grandchild.body.id}`).set("Authorization", `Bearer ${token}`);
+    expect(grandchildGet.status).toBe(404);
   });
 });

@@ -171,11 +171,10 @@ npm run test --workspace=packages/server
 - The server PATCH route in `nodes.ts` handles this cascade automatically now
 - **Never rename a workstream header client-side only** — always go through the API
 
-### Deleting nodes with children requires recursive deletion
-- Deleting a workstream header or node group does NOT auto-delete child nodes (only edges cascade via foreign keys)
-- You must delete leaf nodes first, then node groups, then the header — bottom-up
-- If you delete a parent without deleting children, children become orphans and appear as their own workstreams
-- The Board view delete handlers do this correctly — follow the same pattern
+### Deleting nodes with children — cascade-delete is automatic (v0.5.1.1+)
+- The server DELETE `/api/nodes/:id` route now cascade-deletes all descendant nodes via parent_of edges
+- No need to manually delete children first — the route walks the tree bottom-up
+- The Board view delete handlers still show confirmation dialogs before calling the API
 
 ### SQLite datetime format matters
 - Store timestamps as `YYYY-MM-DD HH:MM:SS` (SQLite format), NOT JavaScript's `toISOString()` which produces `YYYY-MM-DDTHH:MM:SS.sssZ`
@@ -213,7 +212,7 @@ npm run test --workspace=packages/server
 - The `/ship` workflow runs tests, code review, and adversarial review that catch bugs localhost misses
 - Direct-to-main pushes skip all safety checks and have caused production bugs
 
-## Current State (v0.5.1.0, 2026-04-06)
+## Current State (v0.5.1.1, 2026-04-06)
 
 ### What's Built
 - **6 views**: Tasks (default landing), Board, Graph (custom SVG), Gantt (bars + today line), Budget (hero + tables), Kanban (status columns + drag-and-drop)

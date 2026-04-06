@@ -331,7 +331,7 @@ export function GanttView() {
             <div className="gantt-rows">
               {ganttRows.map((row) => {
                 if (row.type === "workstream") {
-                  return <div key={`gg-${row.workstream}`} style={{ height: 32, borderBottom: "1px solid #E7E7E7", background: "#FAFAFA" }} />;
+                  return <div key={`gg-${row.workstream}`} style={{ height: 40, borderBottom: "1px solid #E7E7E7", background: "#FAFAFA" }} />;
                 }
                 if (row.type === "nodegroup") {
                   const n = row.node!;

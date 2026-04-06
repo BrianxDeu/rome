@@ -64,7 +64,7 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, on
         {onAddNodeGroup && activeView !== "archive" && <button className="btn" onClick={onAddNodeGroup}>+ Group</button>}
         {onAddWorkstream && activeView !== "archive" && <button className="btn" onClick={onAddWorkstream}>+ Stream</button>}
         <button
-          className={`archive-btn-topbar ${activeView === "archive" ? "active" : ""}`}
+          className={`btn ${activeView === "archive" ? "primary" : ""}`}
           onClick={() => onViewChange("archive")}
         >
           Archive

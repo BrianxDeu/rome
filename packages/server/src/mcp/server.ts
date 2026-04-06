@@ -293,7 +293,7 @@ function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string)
         if (args.deliverable !== undefined) patch.deliverable = args.deliverable;
         if (args.raci !== undefined) patch.raci = args.raci;
 
-        const updated = updateNode(db, nodeId, patch, MCP_SERVICE_USER_ID);
+        const updated = updateNode(db, nodeId, patch, userId);
         if (!updated) {
           return {
             content: [textContent(JSON.stringify({ error: "update_failed", details: "Node not found during update" }))],
@@ -364,13 +364,13 @@ function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string)
         broadcast({ type: "node:created", payload: node as unknown as Record<string, unknown> });
 
         // parent_of: workstream → node group
-        const parentEdge = createEdge(db, { source_id: wsHeader.id, target_id: node.id, type: "parent_of" }, MCP_SERVICE_USER_ID);
+        const parentEdge = createEdge(db, { source_id: wsHeader.id, target_id: node.id, type: "parent_of" }, userId);
         if (!("error" in parentEdge)) {
           broadcast({ type: "edge:created", payload: parentEdge as unknown as Record<string, unknown> });
         }
 
         // produces: node group → workstream (feeds into)
-        const producesEdge = createEdge(db, { source_id: node.id, target_id: wsHeader.id, type: "produces" }, MCP_SERVICE_USER_ID);
+        const producesEdge = createEdge(db, { source_id: node.id, target_id: wsHeader.id, type: "produces" }, userId);
         if (!("error" in producesEdge)) {
           broadcast({ type: "edge:created", payload: producesEdge as unknown as Record<string, unknown> });
         }
@@ -441,7 +441,7 @@ function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string)
         const sourceId = srcResult.node.id;
         const targetId = tgtResult.node.id;
 
-        const edge = createEdge(db, { source_id: sourceId, target_id: targetId, type: args.type }, MCP_SERVICE_USER_ID);
+        const edge = createEdge(db, { source_id: sourceId, target_id: targetId, type: args.type }, userId);
         if ("error" in edge) {
           return {
             content: [textContent(JSON.stringify(edge))],

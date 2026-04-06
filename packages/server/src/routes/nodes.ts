@@ -233,9 +233,28 @@ export function nodeRoutes(db: Db): Router {
       return;
     }
 
-    // Edges are cascade-deleted via ON DELETE CASCADE in the schema
-    db.delete(nodes).where(eq(nodes.id, req.params.id!)).run();
-    broadcast({ type: "node:deleted", payload: { id: req.params.id! } });
+    // Collect all descendant node IDs (children, grandchildren, etc.) via parent_of edges
+    const deletedIds: string[] = [];
+    const queue = [req.params.id!];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      deletedIds.push(parentId);
+      const childEdges = db
+        .select()
+        .from(edges)
+        .where(and(eq(edges.sourceId, parentId), eq(edges.type, "parent_of")))
+        .all();
+      for (const edge of childEdges) {
+        queue.push(edge.targetId);
+      }
+    }
+
+    // Delete bottom-up (children first, then parent). Edges cascade automatically.
+    for (const id of deletedIds.reverse()) {
+      db.delete(nodes).where(eq(nodes.id, id)).run();
+      broadcast({ type: "node:deleted", payload: { id } });
+    }
+
     res.status(204).send();
   });
 
