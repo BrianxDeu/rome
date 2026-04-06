@@ -61,11 +61,15 @@ npm run test --workspace=packages/server
 
 ## DxD Brand
 
-- Font: Tomorrow (Google Fonts)
+- Font: Montserrat Variable (via `--font-family` in `:root` — one line to change)
 - Primary accent: #B81917 (red)
-- Background: #FFFFFF (white)
+- Background: #F5F4F2 (warm stone)
+- Surface/Cards: #FFFFFF (white)
 - Text: #1A1A1A
-- Secondary gray: #414042
+- Secondary gray: #6B6968
+- Border: #E5E3DF
+- Card border-radius: 8px, chip radius: 4px, button radius: 6px
+- Text casing: Title Case everywhere, ALL CAPS only for `.logo`
 
 ## Known Gotchas — DO NOT REPEAT
 
@@ -209,7 +213,7 @@ npm run test --workspace=packages/server
 - The `/ship` workflow runs tests, code review, and adversarial review that catch bugs localhost misses
 - Direct-to-main pushes skip all safety checks and have caused production bugs
 
-## Current State (v0.5.0.0, 2026-04-03)
+## Current State (v0.5.1.0, 2026-04-06)
 
 ### What's Built
 - **6 views**: Tasks (default landing), Board, Graph (custom SVG), Gantt (bars + today line), Budget (hero + tables), Kanban (status columns + drag-and-drop)

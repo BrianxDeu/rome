@@ -97,16 +97,16 @@ export function AddNodeGroupModal({ onClose }: AddNodeGroupModalProps) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-[380px] font-[Tomorrow]" onKeyDown={handleKeyDown}>
+      <DialogContent className="max-w-[380px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
-          <DialogTitle className="font-[Tomorrow] text-[15px] font-bold">Add Node Group</DialogTitle>
+          <DialogTitle className="text-[15px] font-bold">Add Node Group</DialogTitle>
         </DialogHeader>
 
         <div>
-          <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Group Name *</Label>
+          <Label className="mb-1 text-[11px] text-[#999]">Group Name *</Label>
           <Input
             autoFocus
-            className="font-[Tomorrow] text-[13px]"
+            className="text-[13px]"
             placeholder="e.g. Key Results, Milestones..."
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -114,9 +114,9 @@ export function AddNodeGroupModal({ onClose }: AddNodeGroupModalProps) {
         </div>
 
         <div>
-          <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Under Workstream *</Label>
+          <Label className="mb-1 text-[11px] text-[#999]">Under Workstream *</Label>
           <select
-            className="w-full rounded-md border border-[#E0E0E0] bg-white px-3 py-2 font-[Tomorrow] text-[13px]"
+            className="w-full rounded-md border border-[#E0E0E0] bg-white px-3 py-2 text-[13px]"
             value={selectedWs}
             onChange={(e) => setSelectedWs(e.target.value)}
           >
@@ -128,10 +128,10 @@ export function AddNodeGroupModal({ onClose }: AddNodeGroupModalProps) {
         </div>
 
         <DialogFooter className="flex-row justify-end gap-2">
-          <Button variant="outline" size="sm" className="font-[Tomorrow] text-xs" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>Cancel</Button>
           <Button
             size="sm"
-            className="font-[Tomorrow] text-xs font-semibold"
+            className="text-xs font-semibold"
             style={{ background: "#B81917" }}
             onClick={handleSubmit}
             disabled={!name.trim() || !selectedWs || saving}

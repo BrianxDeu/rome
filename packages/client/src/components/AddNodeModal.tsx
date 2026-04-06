@@ -145,9 +145,9 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-[400px] font-[Tomorrow]" onKeyDown={handleKeyDown}>
+      <DialogContent className="max-w-[400px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
-          <DialogTitle className="font-[Tomorrow] text-[15px] font-bold">Add Node</DialogTitle>
+          <DialogTitle className="text-[15px] font-bold">Add Node</DialogTitle>
         </DialogHeader>
 
         {/* Progress dots */}
@@ -169,10 +169,10 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 0: Name */}
         {step >= 0 && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Name *</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Name *</Label>
             <Input
               autoFocus={step === 0}
-              className="font-[Tomorrow] text-[13px]"
+              className="text-[13px]"
               placeholder="What needs to be done?"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -183,9 +183,9 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 1: Place under (workstream or node group) */}
         {step >= 1 && !defaultClusterId && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Place under</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Place under</Label>
             <select
-              className="w-full rounded-md border border-[#E0E0E0] bg-white px-3 py-2 font-[Tomorrow] text-[13px]"
+              className="w-full rounded-md border border-[#E0E0E0] bg-white px-3 py-2 text-[13px]"
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
               autoFocus={step === 1}
@@ -201,7 +201,7 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
               ))}
             </select>
             {resolvedWorkstream && (
-              <div className="mt-1 text-[9px] text-[#999]">Workstream: {resolvedWorkstream}</div>
+              <div className="mt-1 text-[10px] text-[#999]">Workstream: {resolvedWorkstream}</div>
             )}
           </div>
         )}
@@ -209,14 +209,14 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 2: Priority */}
         {step >= 2 && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Priority</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Priority</Label>
             <div className="flex gap-1.5">
               {PRESET_PRIORITIES.map((p) => (
                 <Button
                   key={p}
                   variant={priority === p ? "default" : "outline"}
                   size="sm"
-                  className="flex-1 font-[Tomorrow] text-xs font-semibold"
+                  className="flex-1 text-xs font-semibold"
                   style={priority === p ? { background: "#B81917", borderColor: "#B81917" } : {}}
                   onClick={() => setPriority(p)}
                 >
@@ -230,19 +230,19 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 3: Dates */}
         {step >= 3 && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Dates</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Dates</Label>
             <div className="grid grid-cols-2 gap-2">
               <Input
                 autoFocus={step === 3}
                 type="date"
-                className="font-[Tomorrow] text-[13px]"
+                className="text-[13px]"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 placeholder="Start"
               />
               <Input
                 type="date"
-                className="font-[Tomorrow] text-[13px]"
+                className="text-[13px]"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 placeholder="End"
@@ -254,11 +254,11 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 4: Budget */}
         {step >= 4 && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Budget</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Budget</Label>
             <Input
               autoFocus={step === 4}
               type="number"
-              className="font-[Tomorrow] text-[13px]"
+              className="text-[13px]"
               placeholder="$0"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
@@ -269,10 +269,10 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Step 5: Responsible */}
         {step >= 5 && (
           <div>
-            <Label className="mb-1 text-[10px] uppercase tracking-wider text-[#999]">Responsible</Label>
+            <Label className="mb-1 text-[11px] text-[#999]">Responsible</Label>
             <Input
               autoFocus={step === 5}
-              className="font-[Tomorrow] text-[13px]"
+              className="text-[13px]"
               placeholder="Who owns this?"
               value={responsible}
               onChange={(e) => setResponsible(e.target.value)}
@@ -283,14 +283,14 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
         {/* Actions */}
         <DialogFooter className="flex-row justify-end gap-2">
           {step < 5 && (
-            <Button variant="outline" size="sm" className="font-[Tomorrow] text-xs" onClick={() => setStep(5)}>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setStep(5)}>
               Skip to end
             </Button>
           )}
           {step < 5 ? (
             <Button
               size="sm"
-              className="font-[Tomorrow] text-xs font-semibold"
+              className="text-xs font-semibold"
               style={{ background: "#B81917" }}
               onClick={(e) => { e.stopPropagation(); advance(); }}
               onPointerDown={(e) => e.stopPropagation()}
@@ -301,7 +301,7 @@ export function AddNodeModal({ defaultWorkstream, defaultClusterId, onClose }: A
           ) : (
             <Button
               size="sm"
-              className="font-[Tomorrow] text-xs font-semibold"
+              className="text-xs font-semibold"
               style={{ background: "#B81917" }}
               onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
               onPointerDown={(e) => e.stopPropagation()}

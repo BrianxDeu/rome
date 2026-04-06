@@ -2,6 +2,25 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.5.1.0] - 2026-04-06
+
+Visual overhaul targeting the shadcn Luma aesthetic. Every view now renders in Montserrat on a warm stone background with white floating cards. The font is controlled by a single CSS variable, so switching fonts is a one-line change.
+
+### Changed
+- Primary font switched from Tomorrow to Montserrat Variable across all views, modals, and panels
+- App background changed from pure white to warm stone (#F5F4F2), cards are white on stone
+- All card border-radius unified to 8px, chips/badges to 4px
+- Navigation tabs, buttons, and labels changed from ALL CAPS to Title Case (logo stays uppercase)
+- Minimum font size raised from 8px to 10px across Gantt bars, Board chips, Budget fills
+- TopBar buttons get 6px border-radius and consistent styling
+- Login card gets box-shadow for depth on stone background
+- +Node / +Group / +Stream buttons now visible on Tasks view
+
+### Removed
+- Board card left-border accent strips (AI slop pattern)
+- Kanban status-colored left-borders on in_progress and blocked cards
+- All hardcoded `font-family: Tomorrow` in Tailwind classes and inline styles (40+ occurrences)
+
 ## [0.5.0.0] - 2026-04-03
 
 Two new capabilities: a Kanban board view and an AI-native write pipeline via MCP. You can now move tasks between status columns with drag-and-drop, and tell Claude to update the project graph in bulk — with transactional guarantees, receipts, and a full audit trail.

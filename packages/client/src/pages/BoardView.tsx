@@ -746,7 +746,6 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
         onClick={() => setBoardExpanded(isExp ? null : n.id)}
       >
         <div className="board-card-drag" onMouseDown={(e) => e.stopPropagation()}>&#8942;&#8942;</div>
-        <div className="board-card-accent" style={{ background: pColor }} />
         <CardContent className="board-card-main flex-1 p-[10px_14px]">
           <div className="board-card-top">
             <div
@@ -760,8 +759,8 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               onKeyDown={isExp ? handleEditableKeyDown : undefined}
             >{n.name}</div>
             <div className="board-card-meta">
-              <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{n.priority}</Badge>
-              <Badge variant="outline" className="font-[Tomorrow] text-[8px] tracking-[0.8px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>{statusLabel(n.status)}</Badge>
+              <Badge variant="outline" className="text-[10px]" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{n.priority}</Badge>
+              <Badge variant="outline" className="text-[10px]" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30" }}>{statusLabel(n.status)}</Badge>
               {raciData.responsible && <span className="board-card-owner">{raciData.responsible}</span>}
             </div>
           </div>
@@ -770,7 +769,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               <div className="dp-field">
                 <Label className="dp-label">Notes</Label>
                 <Textarea
-                  className="font-[Tomorrow] text-[13px]"
+                  className="text-[13px]"
                   value={n.notes ?? ""}
                   placeholder="Freeform notes, links, context..."
                   onChange={(e) => handleFieldChange(n.id, "notes", e.target.value)}
@@ -780,7 +779,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               <div className="dp-field" style={{ marginTop: 8 }}>
                 <Label className="dp-label">Deliverables</Label>
                 <Textarea
-                  className="font-[Tomorrow] text-[13px]"
+                  className="text-[13px]"
                   value={n.deliverable ?? ""}
                   placeholder="What does done look like?"
                   onChange={(e) => handleFieldChange(n.id, "deliverable", e.target.value)}
@@ -803,7 +802,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 <div className="dp-field" style={{ gridColumn: "1 / -1" }}>
                   <Label className="dp-label">RACI</Label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                    <div><Label className="dp-label" style={{ fontSize: 7 }}>R</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.responsible}
+                    <div><Label className="dp-label" style={{ fontSize: 10 }}>R</Label><Input className="text-[11px]" value={raciData.responsible}
                       onChange={(e) => {
                         const next = { ...raciData, responsible: e.target.value };
                         handleFieldChange(n.id, "raci", JSON.stringify(next));
@@ -813,7 +812,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                         handleFieldBlur(n.id, "raci", JSON.stringify(next));
                       }}
                     /></div>
-                    <div><Label className="dp-label" style={{ fontSize: 7 }}>A</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.accountable}
+                    <div><Label className="dp-label" style={{ fontSize: 10 }}>A</Label><Input className="text-[11px]" value={raciData.accountable}
                       onChange={(e) => {
                         const next = { ...raciData, accountable: e.target.value };
                         handleFieldChange(n.id, "raci", JSON.stringify(next));
@@ -823,7 +822,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                         handleFieldBlur(n.id, "raci", JSON.stringify(next));
                       }}
                     /></div>
-                    <div><Label className="dp-label" style={{ fontSize: 7 }}>C</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.consulted}
+                    <div><Label className="dp-label" style={{ fontSize: 10 }}>C</Label><Input className="text-[11px]" value={raciData.consulted}
                       onChange={(e) => {
                         const next = { ...raciData, consulted: e.target.value };
                         handleFieldChange(n.id, "raci", JSON.stringify(next));
@@ -833,7 +832,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                         handleFieldBlur(n.id, "raci", JSON.stringify(next));
                       }}
                     /></div>
-                    <div><Label className="dp-label" style={{ fontSize: 7 }}>I</Label><Input className="font-[Tomorrow] text-[11px]" value={raciData.informed}
+                    <div><Label className="dp-label" style={{ fontSize: 10 }}>I</Label><Input className="text-[11px]" value={raciData.informed}
                       onChange={(e) => {
                         const next = { ...raciData, informed: e.target.value };
                         handleFieldChange(n.id, "raci", JSON.stringify(next));
@@ -847,7 +846,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 </div>
                 <div className="dp-field">
                   <Label className="dp-label">Budget</Label>
-                  <Input type="number" className="font-[Tomorrow] text-[11px]" value={n.budget ?? ""}
+                  <Input type="number" className="text-[11px]" value={n.budget ?? ""}
                     onChange={(e) => handleFieldChange(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
                     onBlur={(e) => handleFieldBlur(n.id, "budget", e.target.value ? Number(e.target.value) : null)}
                   />
@@ -856,19 +855,19 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               <div className="board-card-fields" style={{ marginTop: 8 }}>
                 <div className="dp-field">
                   <Label className="dp-label">Start</Label>
-                  <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.startDate ?? ""}
+                  <Input type="date" className="text-[11px]" value={n.startDate ?? ""}
                     onChange={(e) => { updateNode(n.id, { startDate: e.target.value || null }); patchNode(n.id, "startDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
                   <Label className="dp-label">End</Label>
-                  <Input type="date" className="font-[Tomorrow] text-[11px]" value={n.endDate ?? ""}
+                  <Input type="date" className="text-[11px]" value={n.endDate ?? ""}
                     onChange={(e) => { updateNode(n.id, { endDate: e.target.value || null }); patchNode(n.id, "endDate", e.target.value || null); }}
                   />
                 </div>
                 <div className="dp-field">
                   <Label className="dp-label">Workstream</Label>
-                  <Input className="font-[Tomorrow] text-[11px]" value={n.workstream ?? ""}
+                  <Input className="text-[11px]" value={n.workstream ?? ""}
                     onChange={(e) => handleFieldChange(n.id, "workstream", e.target.value)}
                     onBlur={(e) => handleFieldBlur(n.id, "workstream", e.target.value)}
                   />
@@ -909,7 +908,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                               }
                             </span>
                             <select
-                              style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginLeft: 8 }}
+                              style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", marginLeft: 8 }}
                               value={e.type}
                               onChange={(ev) => changeEdgeType(e.id, ev.target.value)}
                             >
@@ -950,7 +949,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                 );
               })()}
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <Button variant="destructive" size="xs" className="font-[Tomorrow] text-[8px] tracking-[1px] uppercase" onClick={() => { if (!confirm(`Delete "${n.name}"? This cannot be undone.`)) return; handleDelete(n.id); setBoardExpanded(null); }}>DELETE</Button>
+                <Button variant="destructive" size="xs" className="text-[10px]" onClick={() => { if (!confirm(`Delete "${n.name}"? This cannot be undone.`)) return; handleDelete(n.id); setBoardExpanded(null); }}>Delete</Button>
               </div>
             </div>
           )}
@@ -1081,7 +1080,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
               {wsHeader && (
                 <button
                   className="btn"
-                  style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
+                  style={{ marginLeft: "auto", fontSize: 10, padding: "2px 6px", color: "#999", opacity: 0.5 }}
                   title="Delete workstream"
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -1153,7 +1152,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       <div className="board-subgroup-count">{children.length}</div>
                       <button
                         className="btn"
-                        style={{ marginLeft: "auto", fontSize: 8, padding: "2px 6px", color: "#666" }}
+                        style={{ marginLeft: "auto", fontSize: 10, padding: "2px 6px", color: "#666" }}
                         title="Edit node group details"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1164,7 +1163,7 @@ export function BoardView({ onNavigateToNode, onAddNode }: BoardViewProps) {
                       </button>
                       <button
                         className="btn"
-                        style={{ fontSize: 8, padding: "2px 6px", color: "#999", opacity: 0.5 }}
+                        style={{ fontSize: 10, padding: "2px 6px", color: "#999", opacity: 0.5 }}
                         title="Delete node group"
                         onClick={async (e) => {
                           e.stopPropagation();

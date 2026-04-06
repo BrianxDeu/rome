@@ -286,8 +286,8 @@ export function GanttView() {
     <div className="gantt-wrap">
       <div className="gantt-controls">
         {(["week", "month", "quarter", "year"] as TimeScale[]).map((s) => (
-          <Button key={s} variant={scale === s ? "default" : "outline"} size="sm" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={() => setScale(s)}>
-            {s.toUpperCase()}
+          <Button key={s} variant={scale === s ? "default" : "outline"} size="sm" className="text-[11px]" onClick={() => setScale(s)}>
+            {s.charAt(0).toUpperCase() + s.slice(1)}
           </Button>
         ))}
       </div>
@@ -309,7 +309,7 @@ export function GanttView() {
               const isCol = collapsedGroups.has(row.node!.id);
               return (
                 <div key={`ng-${row.node!.id}`} className="gantt-sidebar-item" style={{ paddingLeft: 20, fontWeight: 600, cursor: "pointer", userSelect: "none", fontSize: 11 }} onClick={() => toggleGroup(row.node!.id)}>
-                  <span style={{ display: "inline-block", width: 12, fontSize: 8, marginRight: 4, transition: "transform 0.15s", transform: isCol ? "rotate(-90deg)" : "rotate(0deg)" }}>&#9660;</span>
+                  <span style={{ display: "inline-block", width: 12, fontSize: 10, marginRight: 4, transition: "transform 0.15s", transform: isCol ? "rotate(-90deg)" : "rotate(0deg)" }}>&#9660;</span>
                   {row.node!.name}
                 </div>
               );

@@ -189,8 +189,8 @@ export function NodePanel() {
           <div className="dp-title">{form.name}</div>
           <Button variant="ghost" size="icon-xs" onClick={() => selectNode(null)}>x</Button>
         </div>
-        <Badge variant="outline" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{form.priority}</Badge>
-        <Badge variant="outline" className="font-[Tomorrow] text-[9px] tracking-[1px] uppercase" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30", marginLeft: 8 }}>
+        <Badge variant="outline" className="text-[10px]" style={{ background: pColor + "18", color: pColor, borderColor: pColor + "30" }}>{form.priority}</Badge>
+        <Badge variant="outline" className="text-[10px]" style={{ background: sColor + "18", color: sColor, borderColor: sColor + "30", marginLeft: 8 }}>
           {statusLabel(form.status ?? "not_started")}
         </Badge>
       </div>
@@ -209,39 +209,39 @@ export function NodePanel() {
         </div>
         <div className="dp-field">
           <Label className="dp-label">Workstream</Label>
-          <Input className="font-[Tomorrow] text-[11px]" value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
+          <Input className="text-[11px]" value={form.workstream ?? ""} onChange={(e) => set("workstream", e.target.value)} />
         </div>
         <div className="dp-row">
           <div className="dp-field">
             <Label className="dp-label">Start</Label>
-            <Input type="date" className="font-[Tomorrow] text-[11px]" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
+            <Input type="date" className="text-[11px]" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value || null)} />
           </div>
           <div className="dp-field">
             <Label className="dp-label">End</Label>
-            <Input type="date" className="font-[Tomorrow] text-[11px]" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
+            <Input type="date" className="text-[11px]" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value || null)} />
           </div>
         </div>
         <div className="dp-field">
           <Label className="dp-label">Budget ($)</Label>
-          <Input type="number" className="font-[Tomorrow] text-[11px]" value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
+          <Input type="number" className="text-[11px]" value={form.budget ?? ""} onChange={(e) => set("budget", e.target.value ? Number(e.target.value) : null)} />
         </div>
         <div className="dp-field">
           <Label className="dp-label">Deliverables</Label>
-          <Textarea className="font-[Tomorrow] text-[13px]" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
+          <Textarea className="text-[13px]" value={form.deliverable ?? ""} onChange={(e) => set("deliverable", e.target.value)} />
         </div>
         <div className="dp-field">
           <Label className="dp-label">Notes</Label>
-          <Textarea className="font-[Tomorrow] text-[13px]" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+          <Textarea className="text-[13px]" value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
         </div>
         <div className="dp-field">
           <Label className="dp-label">RACI</Label>
           <div className="dp-row">
-            <div><Label className="dp-label" style={{ fontSize: 7 }}>R</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} /></div>
-            <div><Label className="dp-label" style={{ fontSize: 7 }}>A</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 10 }}>R</Label><Input className="text-[11px]" value={raci.responsible} onChange={(e) => setRaciField("responsible", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 10 }}>A</Label><Input className="text-[11px]" value={raci.accountable} onChange={(e) => setRaciField("accountable", e.target.value)} /></div>
           </div>
           <div className="dp-row" style={{ marginTop: 4 }}>
-            <div><Label className="dp-label" style={{ fontSize: 7 }}>C</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} /></div>
-            <div><Label className="dp-label" style={{ fontSize: 7 }}>I</Label><Input className="font-[Tomorrow] text-[11px]" value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 10 }}>C</Label><Input className="text-[11px]" value={raci.consulted} onChange={(e) => setRaciField("consulted", e.target.value)} /></div>
+            <div><Label className="dp-label" style={{ fontSize: 10 }}>I</Label><Input className="text-[11px]" value={raci.informed} onChange={(e) => setRaciField("informed", e.target.value)} /></div>
           </div>
         </div>
         <div className="dp-field">
@@ -260,7 +260,7 @@ export function NodePanel() {
                   }
                 </span>
                 <select
-                  style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", fontFamily: "Tomorrow", marginLeft: 8 }}
+                  style={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E0E0E0", background: "#F8F8F8", marginLeft: 8 }}
                   value={e.type}
                   onChange={(ev) => handleEdgeTypeChange(e.id, ev.target.value)}
                 >
@@ -282,9 +282,9 @@ export function NodePanel() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           {dirty && (
-            <Button className="flex-1 font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={saveAll}>SAVE</Button>
+            <Button className="flex-1 text-[10px]" onClick={saveAll}>Save</Button>
           )}
-          <Button variant="destructive" className="w-full font-[Tomorrow] text-[9px] tracking-[1px] uppercase" onClick={handleDelete}>DELETE NODE</Button>
+          <Button variant="destructive" className="w-full text-[10px]" onClick={handleDelete}>Delete Node</Button>
         </div>
       </div>
     </div>

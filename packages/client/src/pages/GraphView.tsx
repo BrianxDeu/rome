@@ -382,8 +382,8 @@ export function GraphView() {
   if (storeNodes.length === 0) {
     return (
       <div className="canvas-area" style={{ background: "#FEFEFE", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ color: "#999", fontSize: 12, fontFamily: "Tomorrow, sans-serif" }}>
-          No nodes yet. Create your first node with +NODE.
+        <span style={{ color: "#999", fontSize: 12 }}>
+          No nodes yet. Create your first node with + Node.
         </span>
       </div>
     );
@@ -405,12 +405,11 @@ export function GraphView() {
             background: "#fff",
             color: "#888",
             fontWeight: 500,
-            fontFamily: "Tomorrow, sans-serif",
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
           }}
           title="Fit all nodes in viewport"
         >
-          FIT
+          Fit
         </button>
       </div>
 
@@ -453,7 +452,7 @@ export function GraphView() {
                   fontWeight="500"
                   pointerEvents="none"
                 >
-                  {cluster?.name.toUpperCase() ?? ""}
+                  {cluster?.name ?? ""}
                 </text>
               </g>
             );

@@ -132,12 +132,12 @@ export function BudgetView() {
       </div>
       <div className="budget-section">
         <div className="budget-section-title">By Priority</div>
-        <Table className="font-[Tomorrow]">
+        <Table className="">
           <TableHeader>
             <TableRow>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Priority</TableHead>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Count</TableHead>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Budget</TableHead>
+              <TableHead className="text-[10px]">Priority</TableHead>
+              <TableHead className="text-[10px]">Count</TableHead>
+              <TableHead className="text-[10px]">Budget</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -147,7 +147,7 @@ export function BudgetView() {
               return (
                 <TableRow key={p}>
                   <TableCell>
-                    <Badge variant="outline" className="font-[Tomorrow] text-[10px] font-semibold" style={{ color: priorityColor(p), borderColor: priorityColor(p) + "40" }}>{p}</Badge>
+                    <Badge variant="outline" className="text-[10px] font-semibold" style={{ color: priorityColor(p), borderColor: priorityColor(p) + "40" }}>{p}</Badge>
                   </TableCell>
                   <TableCell className="text-[10px]">{pn.length}</TableCell>
                   <TableCell className="text-[10px]">{fmt$(pn.reduce((s, n) => s + (n.budget || 0), 0))}</TableCell>
@@ -160,20 +160,20 @@ export function BudgetView() {
       <div className="budget-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E7E7E7", paddingBottom: 6, marginBottom: 12 }}>
           <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>Budget Items</div>
-          <select className="dp-input" style={{ width: "auto", fontSize: 9, padding: "4px 8px" }} value={budgetFilter} onChange={(e) => setBudgetFilter(e.target.value)}>
+          <select className="dp-input" style={{ width: "auto", fontSize: 11, padding: "4px 8px" }} value={budgetFilter} onChange={(e) => setBudgetFilter(e.target.value)}>
             <option value="all">All Workstreams</option>
             {workstreams.map((ws) => <option key={ws} value={ws}>{ws}</option>)}
           </select>
         </div>
-        <Table className="font-[Tomorrow]">
+        <Table className="">
           <TableHeader>
             <TableRow>
-              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("label")}>Task {budgetSort === "label" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
-              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("priority")}>Priority {budgetSort === "priority" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Workstream</TableHead>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Status</TableHead>
-              <TableHead className="text-[8px] tracking-[1px] uppercase">Owner</TableHead>
-              <TableHead className="cursor-pointer text-[8px] tracking-[1px] uppercase hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("budget")}>Budget {budgetSort === "budget" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+              <TableHead className="cursor-pointer text-[10px] hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("label")}>Task {budgetSort === "label" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+              <TableHead className="cursor-pointer text-[10px] hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("priority")}>Priority {budgetSort === "priority" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
+              <TableHead className="text-[10px]">Workstream</TableHead>
+              <TableHead className="text-[10px]">Status</TableHead>
+              <TableHead className="text-[10px]">Owner</TableHead>
+              <TableHead className="cursor-pointer text-[10px] hover:bg-[#F0F0F0]" onClick={() => toggleBudgetSort("budget")}>Budget {budgetSort === "budget" ? (budgetDir > 0 ? "\u2191" : "\u2193") : ""}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -181,7 +181,7 @@ export function BudgetView() {
               <TableRow key={n.id} className="cursor-pointer">
                 <TableCell className="text-[10px]" onClick={() => selectNode(n)}>{n.name}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="font-[Tomorrow] text-[10px]" style={{ color: priorityColor(n.priority), borderColor: priorityColor(n.priority) + "40" }}>{n.priority}</Badge>
+                  <Badge variant="outline" className="text-[10px]" style={{ color: priorityColor(n.priority), borderColor: priorityColor(n.priority) + "40" }}>{n.priority}</Badge>
                 </TableCell>
                 <TableCell className="text-[10px]">{n.workstream}</TableCell>
                 <TableCell className="text-[10px]">{statusLabel(n.status)}</TableCell>
@@ -189,7 +189,7 @@ export function BudgetView() {
                 <TableCell>
                   <Input
                     type="number"
-                    className="w-[90px] text-right font-[Tomorrow] text-[10px] font-semibold"
+                    className="w-[90px] text-right text-[10px] font-semibold"
                     value={n.budget ?? 0}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => handleBudgetChange(n.id, parseInt(e.target.value) || 0)}

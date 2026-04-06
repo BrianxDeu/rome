@@ -151,7 +151,7 @@ export function TasksView() {
   }, [tasks]);
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "40px 20px", fontFamily: "Tomorrow, sans-serif", overflowY: "auto", flex: 1 }}>
+    <div style={{ maxWidth: 600, margin: "0 auto", padding: "40px 20px", overflowY: "auto", flex: 1 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 22, fontWeight: 300, color: "#414042", letterSpacing: 1 }}>My Tasks</div>
         <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.5 }}>{dateStr}</div>
@@ -191,7 +191,7 @@ export function TasksView() {
           }}
           onClick={addTask}
         >
-          ADD
+          Add
         </button>
       </div>
 
@@ -230,7 +230,7 @@ export function TasksView() {
               <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>{t.text}</div>
               <div
                 style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 0.5, padding: "2px 6px", borderRadius: 4,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "2px 6px", borderRadius: 4,
                   color: PRIORITY_COLORS[t.priority] || "#999",
                   background: t.priority === "P0" ? "#F0F0F0" : t.priority === "P1" ? "#FFF0F0" : t.priority === "P2" ? "#F0F6FF" : "#F8F8F8",
                 }}

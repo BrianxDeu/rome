@@ -55,28 +55,28 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, on
             className={`tab ${activeView === t ? "active" : ""}`}
             onClick={() => onViewChange(t)}
           >
-            {t.toUpperCase()}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
       <div className="top-actions">
-        {onAddNode && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddNode}>+ NODE</button>}
-        {onAddNodeGroup && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddNodeGroup}>+ GROUP</button>}
-        {onAddWorkstream && activeView !== "tasks" && activeView !== "archive" && <button className="btn" onClick={onAddWorkstream}>+ STREAM</button>}
+        {onAddNode && activeView !== "archive" && <button className="btn" onClick={onAddNode}>+ Node</button>}
+        {onAddNodeGroup && activeView !== "archive" && <button className="btn" onClick={onAddNodeGroup}>+ Group</button>}
+        {onAddWorkstream && activeView !== "archive" && <button className="btn" onClick={onAddWorkstream}>+ Stream</button>}
         <button
           className={`archive-btn-topbar ${activeView === "archive" ? "active" : ""}`}
           onClick={() => onViewChange("archive")}
         >
-          ARCHIVE
+          Archive
         </button>
-        <button className="btn" onClick={() => setShareOpen(!shareOpen)}>SHARE</button>
-        {user && <span style={{ fontSize: 9, color: "#999", letterSpacing: 1 }}>{user.username}</span>}
-        <button className="btn" onClick={logout}>LOGOUT</button>
+        <button className="btn" onClick={() => setShareOpen(!shareOpen)}>Share</button>
+        {user && <span style={{ fontSize: 11, color: "var(--rome-text-muted)" }}>{user.username}</span>}
+        <button className="btn" onClick={logout}>Logout</button>
       </div>
 
       {shareOpen && (
         <div className="share-pop" ref={popoverRef}>
-          <div className="share-pop-title">SHARE LINK</div>
+          <div className="share-pop-title">Share Link</div>
           <input
             className="share-input"
             value={shareUrl()}
@@ -84,7 +84,7 @@ export function TopBar({ activeView, onViewChange, onAddNode, onAddNodeGroup, on
             onFocus={(e) => e.target.select()}
             onClick={handleCopy}
           />
-          <div style={{ fontSize: 9, color: copied ? "#2E7D32" : "#999" }}>
+          <div style={{ fontSize: 11, color: copied ? "#2E7D32" : "#999" }}>
             {copied ? "Copied!" : "Click to copy URL"}
           </div>
         </div>
