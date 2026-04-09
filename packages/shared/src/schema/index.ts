@@ -74,3 +74,18 @@ export const personalTasks = sqliteTable("personal_tasks", {
   doneAt: text("done_at"),
   createdAt: text("created_at").notNull(),
 });
+
+export const oauthClients = sqliteTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  clientName: text("client_name"),
+  redirectUris: text("redirect_uris").notNull().default("[]"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const oauthTokens = sqliteTable("oauth_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  refreshToken: text("refresh_token").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});

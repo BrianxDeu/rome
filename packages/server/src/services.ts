@@ -594,19 +594,47 @@ export function queryAuditTrail(
 // 8. Execute Plan
 // ---------------------------------------------------------------------------
 
+// Normalize camelCase field aliases → snake_case before Zod validation.
+// Claude naturally uses camelCase; the schemas expect snake_case.
+function normalizeNodeFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const aliases: Record<string, string> = {
+    startDate: "start_date",
+    endDate: "end_date",
+    positionPinned: "position_pinned",
+    nodeId: "node_id",
+    sourceId: "source_id",
+    targetId: "target_id",
+  };
+  const result = { ...fields };
+  for (const [camel, snake] of Object.entries(aliases)) {
+    if (camel in result && !(snake in result)) {
+      result[snake] = result[camel];
+      delete result[camel];
+    }
+  }
+  return result;
+}
+
+function normalizeEdgeFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...fields };
+  if ("sourceId" in result && !("source_id" in result)) { result.source_id = result.sourceId; delete result.sourceId; }
+  if ("targetId" in result && !("target_id" in result)) { result.target_id = result.targetId; delete result.targetId; }
+  return result;
+}
+
 const executePlanOperationSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("update"),
     nodeId: z.string(),
-    fields: updateNodeSchema,
+    fields: z.record(z.string(), z.any()).transform(normalizeNodeFields).pipe(updateNodeSchema),
   }),
   z.object({
     action: z.literal("create"),
-    fields: createNodeSchema,
+    fields: z.record(z.string(), z.any()).transform(normalizeNodeFields).pipe(createNodeSchema),
   }),
   z.object({
     action: z.literal("create_edge"),
-    fields: createEdgeSchema,
+    fields: z.record(z.string(), z.any()).transform(normalizeEdgeFields).pipe(createEdgeSchema),
   }),
 ]);
 

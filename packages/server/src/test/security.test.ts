@@ -140,8 +140,8 @@ describe("Auth Security", () => {
 // ---------------------------------------------------------------------------
 
 describe("OAuth Security", () => {
-  describe("OAuth authorize auto-approves for MCP clients", () => {
-    it("should redirect (302) without requiring JWT — MCP clients need this", async () => {
+  describe("OAuth authorize requires login", () => {
+    it("should return 400 when client_id is missing", async () => {
       const res = await request(ctx.app)
         .get("/oauth/authorize")
         .query({
@@ -149,8 +149,31 @@ describe("OAuth Security", () => {
           state: "test-state",
         });
 
-      // Auto-approve: MCP clients don't have JWTs, they need OAuth to get one
-      expect(res.status).toBe(302);
+      // Login gate: client_id is now required
+      expect(res.status).toBe(400);
+    });
+
+    it("should return HTML login form (200) for valid params", async () => {
+      const registerRes = await request(ctx.app)
+        .post("/oauth/register")
+        .send({ client_name: "TestClient", redirect_uris: ["http://example.com/callback"] });
+      expect(registerRes.status).toBe(201);
+
+      const pkceChallenge = require("crypto").createHash("sha256")
+        .update(require("crypto").randomBytes(32).toString("base64url"))
+        .digest("base64url");
+      const res = await request(ctx.app)
+        .get("/oauth/authorize")
+        .query({
+          client_id: registerRes.body.client_id,
+          redirect_uri: "http://example.com/callback",
+          state: "test-state",
+          code_challenge: pkceChallenge,
+          code_challenge_method: "S256",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("<form");
     });
   });
 

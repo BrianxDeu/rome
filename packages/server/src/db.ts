@@ -107,4 +107,24 @@ export function initTables(sqlite: BetterSqlite3.Database) {
   }
   // Backfill: set completed_at from updated_at for existing done nodes
   sqlite.exec(`UPDATE nodes SET completed_at = updated_at WHERE status = 'done' AND completed_at IS NULL`);
+
+  // OAuth persistence tables
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS oauth_clients (
+      client_id TEXT PRIMARY KEY,
+      client_name TEXT,
+      redirect_uris TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS oauth_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      refresh_token TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_tokens_refresh ON oauth_tokens(refresh_token);
+    CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id);
+  `);
 }

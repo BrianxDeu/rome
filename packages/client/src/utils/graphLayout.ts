@@ -1,9 +1,14 @@
 import type { Node, Edge } from "@rome/shared";
 import { buildClusterMaps } from "../constants";
 
+// A "goal node" is a top-level hub — no parent, no workstream, and named with the OBJ prefix.
+// Previously this used a broad substring match ("goal" | "mission") which incorrectly matched
+// task nodes whose names happened to contain those words (e.g. "Funding pursuit... JIATF-401").
 export function isGoalNode(node: Node): boolean {
-  const name = node.name.toLowerCase();
-  return name.includes("goal") || name.includes("mission");
+  // Must be a top-level node (no workstream field set)
+  if (node.workstream) return false;
+  // Must match OBJ prefix convention: "OBJ1:", "OBJ2:", etc.
+  return /^OBJ\d+:/i.test(node.name.trim());
 }
 
 export function computeLayout(
@@ -19,15 +24,20 @@ export function computeLayout(
     positions.set(goalNode.id, { x: 0, y: 0 });
   }
 
-  // Group by workstream
+  // Group by workstream. Nodes with null workstream go into "~orphans" — a special bucket
+  // that gets placed far from center (bottom) to avoid colliding with the goal node at (0,0).
   const workstreams = new Map<string, Node[]>();
   for (const n of nodes) {
     if (goalNode && n.id === goalNode.id) continue;
-    const ws = n.workstream ?? "Other";
+    const ws = n.workstream ?? "~orphans";
     const group = workstreams.get(ws) ?? [];
     group.push(n);
     workstreams.set(ws, group);
   }
+
+  // Separate orphans from real workstreams so we can position them distinctly
+  const orphanNodes = workstreams.get("~orphans") ?? [];
+  workstreams.delete("~orphans");
 
   const wsEntries = [...workstreams.entries()];
   const wsCount = wsEntries.length;
@@ -79,6 +89,17 @@ export function computeLayout(
         x: wsCenter.x + Math.cos(leafAngle) * leafRadius,
         y: wsCenter.y + Math.sin(leafAngle) * leafRadius,
       });
+    });
+  });
+
+  // Place orphan nodes (null workstream) in a row far below center, clearly separated
+  const orphanBaseY = baseRadius + 200;
+  orphanNodes.forEach((n, i) => {
+    const spacing = 120;
+    const totalW = (orphanNodes.length - 1) * spacing;
+    positions.set(n.id, {
+      x: i * spacing - totalW / 2,
+      y: orphanBaseY,
     });
   });
 

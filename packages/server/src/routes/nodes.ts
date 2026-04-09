@@ -1,26 +1,10 @@
 import { Router } from "express";
 import { eq, and, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { nodes, edges, users } from "@rome/shared/schema";
+import { nodes, edges } from "@rome/shared/schema";
 import type { Db } from "../db.js";
 import { broadcast } from "../socket.js";
 
-/** Ensure the authenticated user exists in the local DB (handles cross-env tokens) */
-function ensureUser(db: Db, userId: string) {
-  const existing = db.select().from(users).where(eq(users.id, userId)).get();
-  if (!existing) {
-    const now = new Date().toISOString();
-    db.insert(users).values({
-      id: userId,
-      username: `user-${userId.slice(0, 8)}`,
-      email: `${userId.slice(0, 8)}@local`,
-      passwordHash: "",
-      role: "member",
-      createdAt: now,
-      updatedAt: now,
-    }).run();
-  }
-}
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -109,8 +93,6 @@ export function nodeRoutes(db: Db): Router {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const data = parsed.data;
-
-    ensureUser(db, req.auth!.userId);
 
     try {
       db.insert(nodes)

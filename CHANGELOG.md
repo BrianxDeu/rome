@@ -2,7 +2,19 @@
 
 All notable changes to Rome will be documented in this file.
 
-## [0.5.1.1] - 2026-04-06
+## [0.5.2.0] - 2026-04-09
+
+Three bug fixes: MCP connector stability (Claude Desktop no longer drops after Railway deploys or token expiry), silent date loss in `rome_execute_plan`, and a graph rendering bug that misidentified arbitrary nodes as the central "GOAL" hub.
+
+### Fixed
+- **MCP OAuth persistence** — OAuth client registrations and refresh tokens now survive Railway deploys (stored in `oauth_clients` + `oauth_tokens` SQLite tables). Access tokens extended from 1h to 7d; refresh tokens last 30d so Claude Desktop can silently renew without re-authorization
+- **PKCE now enforced** — `/oauth/authorize` requires `code_challenge` on all requests; public clients have no `client_secret` so PKCE is the sole proof-of-possession
+- **`rome_execute_plan` date fields** — `startDate`/`endDate` (camelCase) now auto-normalize to `start_date`/`end_date` before validation; dates were previously silently dropped when Claude used natural camelCase
+- **Graph `isGoalNode` mismatch** — goal node detection now matches the explicit `OBJ\d+:` prefix convention instead of substring-matching "goal"/"mission", which caused unrelated task nodes to be rendered as the central hub with a "GOAL" label
+- **Orphan nodes in graph** — nodes with no workstream (null) are now placed in a row below center instead of colliding with the goal node at (0,0)
+- **Security hardening** (from earlier commits on branch): removed `ensureUser` auto-provisioning, dropped static MCP token, pinned GitHub Actions to SHA, container runs as non-root, OAuth redirect\_uri validation, registration cap
+
+
 
 Three fixes from QA sprint: cascade-delete children when deleting a parent node (prevents orphans), MCP tools now use the authenticated user ID instead of a hardcoded service account, and Socket.IO reconnects automatically refetch the graph to prevent stale state.
 

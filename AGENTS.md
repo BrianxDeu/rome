@@ -1,4 +1,4 @@
-> **Sync note**: This file (`CLAUDE.md`) and `AGENTS.md` are mirrors of each other — identical content, different filenames for different AI toolchains. **When you update one, update both.** The self-update rule in "Known Gotchas" applies to both files equally.
+> **Sync note**: This file (`AGENTS.md`) and `CLAUDE.md` are mirrors of each other — identical content, different filenames for different AI toolchains. **When you update one, update both.** The self-update rule in "Known Gotchas" applies to both files equally.
 
 # Rome
 

@@ -4,7 +4,7 @@
  * Exposes 9 tools: rome_get_graph, rome_create_task, rome_update_node,
  * rome_create_node_group, rome_create_edge, rome_status_report,
  * rome_execute_plan, rome_audit_trail
- * Auth: Bearer token checked against MCP_AUTH_TOKEN env var
+ * Auth: Bearer JWT verified against JWT_SECRET
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -505,7 +505,7 @@ function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string)
   // ---- Tool 7: rome_execute_plan -----------------------------------------------
   mcp.tool(
     "rome_execute_plan",
-    "Executes a batch of create/update/create_edge operations in a single transaction. Use this after calling rome_get_graph and presenting a plan to the user. Returns per-operation receipts with before/after values. Individual operation errors are captured in receipts but don't abort the remaining operations. If self-verification detects a data mismatch after all operations complete, the entire transaction is rolled back automatically.",
+    "Executes a batch of create/update/create_edge operations in a single transaction. Use this after calling rome_get_graph and presenting a plan to the user. Returns per-operation receipts with before/after values. Individual operation errors are captured in receipts but don't abort the remaining operations. If self-verification detects a data mismatch after all operations complete, the entire transaction is rolled back automatically.\n\n**Field naming:** Both camelCase and snake_case are accepted in `fields` — e.g. `startDate` or `start_date`, `endDate` or `end_date`. Always include dates when creating or updating nodes that have schedule information.",
     {
       operations: z.array(z.object({
         action: z.enum(["update", "create", "create_edge"]),
@@ -554,14 +554,13 @@ function createMcpServer(db: Db, sqlite: BetterSqlite3.Database, userId: string)
     {
       since: z.string().optional().describe("Filter entries after this timestamp (ISO or SQLite format)"),
       tool_name: z.string().optional().describe("Filter by tool name (e.g. rome_update_node)"),
-      user_id: z.string().optional().describe("Filter by user ID"),
       node_id: z.string().optional().describe("Filter by affected node ID"),
       limit: z.number().optional().describe("Max entries to return (default 50)"),
     },
     async (args) => {
       try {
-        // Default to caller's own userId to prevent cross-user data exposure
-        const scopedArgs = { ...args, user_id: args.user_id ?? userId };
+        // Always scope to the caller's userId — no cross-user audit reads
+        const scopedArgs = { ...args, user_id: userId };
         const entries = queryAuditTrail(db, scopedArgs);
         return {
           content: [textContent(JSON.stringify({
@@ -604,20 +603,18 @@ export function createMcpHandler(db: Db, sqlite: BetterSqlite3.Database): Reques
     }
 
     const token = authHeader.slice(7);
-    // Accept either a JWT (new per-session tokens) or the static MCP_AUTH_TOKEN (legacy)
-    const authToken = process.env.MCP_AUTH_TOKEN;
+    // Only accept JWTs — no static token fallback
     let tokenValid = false;
-    if (authToken && token === authToken) {
-      tokenValid = true; // Legacy static token
-    } else {
-      try {
-        const { getJwtSecret } = await import("../middleware/auth.js");
-        const jwt = await import("jsonwebtoken");
-        jwt.default.verify(token, getJwtSecret());
-        tokenValid = true;
-      } catch {
-        // JWT verification failed
+    let userId = MCP_SERVICE_USER_ID;
+    try {
+      const payload = jwt.verify(token, getJwtSecret()) as AuthPayload;
+      tokenValid = true;
+      if (payload.userId) {
+        userId = payload.userId;
+        console.log(`[MCP] Authenticated as user ${userId}`);
       }
+    } catch {
+      // JWT verification failed
     }
     if (!tokenValid) {
       const proto = req.get("x-forwarded-proto") || req.protocol;
@@ -640,22 +637,6 @@ export function createMcpHandler(db: Db, sqlite: BetterSqlite3.Database): Reques
     if (req.method === "GET" && !req.headers.accept?.includes("text/event-stream")) {
       res.json({ name: "rome-mcp", version: "1.0.0", status: "ok" });
       return;
-    }
-
-    // Extract user identity from JWT bearer token if possible
-    let userId = MCP_SERVICE_USER_ID;
-    const bearerToken = authHeader?.replace("Bearer ", "");
-    if (bearerToken) {
-      try {
-        const payload = jwt.verify(bearerToken, getJwtSecret()) as AuthPayload;
-        if (payload.userId) {
-          userId = payload.userId;
-          console.log(`[MCP] Authenticated as user ${userId}`);
-        }
-      } catch {
-        // Token is not a JWT (e.g. static MCP_AUTH_TOKEN) — fall back to service user
-        console.log("[MCP] Bearer token is not a JWT, using service user fallback");
-      }
     }
 
     try {
