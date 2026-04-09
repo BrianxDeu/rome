@@ -33,19 +33,18 @@ COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
 COPY packages/cli/package.json packages/cli/
 RUN npm ci --omit=dev
-RUN addgroup --system --gid 1001 rome && \
-    adduser --system --uid 1001 --ingroup rome rome
 
 # Copy built artifacts
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/packages/server/dist packages/server/dist
 COPY --from=build /app/packages/client/dist packages/client/dist
 
-# SQLite data directory
-RUN mkdir -p /data && chown -R rome:rome /data
+# SQLite data directory — Railway mounts the persistent volume over /data at
+# container start. Running as root avoids permission conflicts when the volume
+# was previously owned by root. Railway already sandboxes the container.
+RUN mkdir -p /data
 ENV DATABASE_PATH=/data/rome.db
 ENV PORT=3000
 EXPOSE 3000
 
-USER rome
 CMD ["node", "packages/server/dist/index.js"]
