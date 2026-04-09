@@ -191,6 +191,13 @@ npm run test --workspace=packages/server
 - Just close the HTTP server and let Railway manage the process lifecycle
 - Active MCP/Socket.IO connections are severed on deploy — there's no way around this without persistent sessions
 
+### DO NOT run container as non-root on Railway
+- Railway mounts the `/data` persistent volume **after** image layers, with root ownership from prior deploys
+- A non-root user (e.g. uid 1001) cannot write to the volume → `SQLITE_READONLY` crash loop on every boot
+- Attempted this in v0.5.1.x security hardening — crashed production immediately
+- Railway already sandboxes containers at infra level; non-root adds no meaningful security for this internal tool
+- If non-root is ever revisited: use an entrypoint script that `chown`s `/data` as root before `exec`-ing as the app user
+
 ### MCP connection stability
 - MCP OAuth tokens expire in 7 days (matches user JWT expiry)
 - MCP handler has an error boundary in `app.ts` that catches unhandled exceptions
