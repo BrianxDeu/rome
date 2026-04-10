@@ -2,6 +2,17 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.5.2.1] - 2026-04-10
+
+Graph view overhaul: the center node is now the workstream with the most activity (HALO + Orcrist MVP), not a hardcoded OBJ1. All five OBJ workstreams are now visible. Closing a workstream collapses everything inside it. Empty workstreams show at full size.
+
+### Fixed
+- **OBJ2-5 invisible in graph** — `isGoalNode` matched all OBJ nodes but only rendered OBJ1; the rest were excluded from every render path. Now only the hub node gets special treatment, others render as structural nodes
+- **Hub node selection** — center node is now the structural node with the most descendants (dynamic), not the first OBJ-prefix match (hardcoded)
+- **Cascading collapse** — closing a workstream now hides all descendants recursively, including node group children that were previously orphaned on screen
+- **Empty workstreams** — workstreams with no children (like "Build a Drone") now render at the same size as populated workstreams instead of appearing as tiny orphan dots
+- **Layout grouping** — workstream headers are now positioned at the center of their child group instead of being dumped into a disconnected orphan row
+
 ## [0.5.2.0] - 2026-04-09
 
 Three bug fixes: MCP connector stability (Claude Desktop no longer drops after Railway deploys or token expiry), silent date loss in `rome_execute_plan`, and a graph rendering bug that misidentified arbitrary nodes as the central "GOAL" hub.

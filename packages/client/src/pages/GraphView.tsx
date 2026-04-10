@@ -9,7 +9,7 @@ import {
   priorityColor,
 } from "../constants";
 import { useStaticLayout } from "../hooks/useForceSimulation";
-import { isGoalNode } from "../utils/graphLayout";
+import { findHubNode } from "../utils/graphLayout";
 
 interface Viewport {
   x: number;
@@ -37,11 +37,18 @@ export function GraphView() {
     [storeEdges],
   );
 
-  // Workstream header: no parent, no ws field, not goal, AND has children
-  // (nodes with no parent + no ws + no children are just orphan nodes, not ws headers)
+  // Hub node: the structural node with the most descendants — natural center of the graph
+  const hubNode = useMemo(
+    () => findHubNode(storeNodes, childrenMap, parentMap),
+    [storeNodes, childrenMap, parentMap],
+  );
+  const hubNodeId = hubNode?.id ?? null;
+
+  // Workstream header: no parent, no ws field, not THE hub node
+  // Empty workstreams (no children yet) are still workstream headers
   const isWsHeader = useCallback(
-    (n: Node) => !parentMap.has(n.id) && !isGoalNode(n) && !n.workstream && (childrenMap.get(n.id)?.length ?? 0) > 0,
-    [parentMap, childrenMap],
+    (n: Node) => !parentMap.has(n.id) && n.id !== hubNodeId && !n.workstream,
+    [parentMap, hubNodeId],
   );
 
   // "Structural" nodes: cluster parents OR workstream headers (rendered as big nodes, not task dots)
@@ -54,12 +61,23 @@ export function GraphView() {
 
   const selId = selectedNode?.id ?? null;
 
-  // Which child nodes are hidden (their cluster is collapsed)?
+  // Which child nodes are hidden? Cascading: if a parent is hidden or collapsed,
+  // ALL its descendants are hidden too (closing a workstream hides its node groups AND their children)
   const hiddenNodeIds = useMemo(() => {
     const hidden = new Set<string>();
+    function hideDescendants(nodeId: string) {
+      const kids = childrenMap.get(nodeId) ?? [];
+      for (const childId of kids) {
+        hidden.add(childId);
+        hideDescendants(childId);
+      }
+    }
     for (const [clusterId, children] of childrenMap.entries()) {
       if (!expandedClusters.has(clusterId)) {
-        for (const childId of children) hidden.add(childId);
+        for (const childId of children) {
+          hidden.add(childId);
+          hideDescendants(childId);
+        }
       }
     }
     return hidden;
@@ -155,17 +173,16 @@ export function GraphView() {
       for (const sib of childrenMap.get(pid) ?? []) ids.add(sib);
     }
     for (const child of childrenMap.get(selId) ?? []) ids.add(child);
-    const goalNode = storeNodes.find(isGoalNode);
-    if (goalNode) {
+    if (hubNodeId) {
       const clusterIds = [...childrenMap.keys()];
-      if (selId === goalNode.id) {
+      if (selId === hubNodeId) {
         for (const cid of clusterIds) ids.add(cid);
       } else if (clusterIds.includes(selId)) {
-        ids.add(goalNode.id);
+        ids.add(hubNodeId);
       }
     }
     return ids;
-  }, [selId, storeEdges, parentMap, childrenMap, storeNodes]);
+  }, [selId, storeEdges, parentMap, childrenMap, hubNodeId]);
 
   // Wheel zoom
   useEffect(() => {
@@ -338,8 +355,6 @@ export function GraphView() {
     document.addEventListener("mouseup", onUp);
   }
 
-  const goalNode = useMemo(() => storeNodes.find(isGoalNode) ?? null, [storeNodes]);
-
   function edgeColor(type: string): string {
     if (type === "blocks" || type === "blocker") return "#B81917";
     if (type === "depends_on") return "#f59e0b";
@@ -458,25 +473,25 @@ export function GraphView() {
             );
           })}
 
-          {/* Goal → structural node connector lines */}
+          {/* Hub → structural node connector lines */}
           {(() => {
-            if (!goalNode) return null;
-            const goalPos = posMap.get(goalNode.id);
-            if (!goalPos) return null;
+            if (!hubNode) return null;
+            const hubPos = posMap.get(hubNode.id);
+            if (!hubPos) return null;
             return storeNodes
-              .filter((n) => isStructuralNode(n) && !isGoalNode(n))
+              .filter((n) => isStructuralNode(n) && n.id !== hubNodeId && !hiddenNodeIds.has(n.id))
               .map((cluster) => {
                 const cPos = posMap.get(cluster.id);
                 if (!cPos) return null;
-                const dx = cPos.x - goalPos.x;
-                const dy = cPos.y - goalPos.y;
+                const dx = cPos.x - hubPos.x;
+                const dy = cPos.y - hubPos.y;
                 const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                const dim = selId && selId !== goalNode.id && selId !== cluster.id;
+                const dim = selId && selId !== hubNode.id && selId !== cluster.id;
                 return (
                   <line
-                    key={`goal-${cluster.id}`}
-                    x1={goalPos.x + (dx / dist) * 24}
-                    y1={goalPos.y + (dy / dist) * 24}
+                    key={`hub-${cluster.id}`}
+                    x1={hubPos.x + (dx / dist) * 24}
+                    y1={hubPos.y + (dy / dist) * 24}
                     x2={cPos.x - (dx / dist) * 12}
                     y2={cPos.y - (dy / dist) * 12}
                     stroke="#D0D0D0"
@@ -515,7 +530,7 @@ export function GraphView() {
 
           {/* Structural nodes (cluster parents + workstream headers) */}
           {storeNodes
-            .filter((n) => isStructuralNode(n) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
+            .filter((n) => isStructuralNode(n) && n.id !== hubNodeId && !hiddenNodeIds.has(n.id))
             .map((cluster) => {
               const pos = posMap.get(cluster.id);
               if (!pos) return null;
@@ -573,28 +588,51 @@ export function GraphView() {
               );
             })}
 
-          {/* Goal node */}
+          {/* Hub node — center of the graph, largest structural node */}
           {(() => {
-            const gn = goalNode;
-            if (!gn) return null;
-            const pos = posMap.get(gn.id);
+            if (!hubNode) return null;
+            const pos = posMap.get(hubNode.id);
             if (!pos) return null;
-            const isSelected = selId === gn.id;
-            const dimmed = selId && !isSelected && !connectedIds.has(gn.id);
+            const isSelected = selId === hubNode.id;
+            const dimmed = selId && !isSelected && !connectedIds.has(hubNode.id);
+            const isHovered = hoveredNode === hubNode.id;
+            const isExpanded = expandedClusters.has(hubNode.id);
+            const childCount = (childrenMap.get(hubNode.id) ?? []).length;
+            const r = 22;
             return (
-              <g className="graph-node" onMouseDown={(e) => onNodeMouseDown(e, gn.id)} style={{ opacity: dimmed ? 0.15 : 1, transition: "opacity 0.2s", cursor: "pointer" }}>
-                <circle cx={pos.x} cy={pos.y} r={22} fill="#1A1A1A" stroke={isSelected ? "#B81917" : "none"} strokeWidth={isSelected ? 2 : 0} />
+              <g
+                className="graph-node"
+                onMouseDown={(e) => onNodeMouseDown(e, hubNode.id)}
+                onMouseEnter={() => setHoveredNode(hubNode.id)}
+                onMouseLeave={() => setHoveredNode(null)}
+                style={{ opacity: dimmed ? 0.15 : 1, transition: "opacity 0.2s", cursor: "pointer" }}
+              >
+                {!isExpanded && (
+                  <circle cx={pos.x} cy={pos.y} r={r + 5} fill="none" stroke="#C0C0C0" strokeWidth={1} strokeDasharray="4,3" pointerEvents="none" />
+                )}
+                <circle cx={pos.x} cy={pos.y} r={r} fill="#1A1A1A" stroke={isSelected ? "#B81917" : "#FFF"} strokeWidth={isSelected ? 2 : 1} />
+                {!isExpanded && childCount > 0 && (
+                  <g pointerEvents="none">
+                    <circle cx={pos.x + r - 2} cy={pos.y - r + 2} r={7} fill="#B81917" />
+                    <text x={pos.x + r - 2} y={pos.y - r + 5} textAnchor="middle" fontSize="8" fontWeight="600" fill="#FFF">
+                      {childCount}
+                    </text>
+                  </g>
+                )}
+                {statusDot(pos.x, pos.y, r, hubNode.status)}
                 <text x={pos.x} y={pos.y + 1} textAnchor="middle" fontSize="7" fontWeight="600" fill="#FFFFFF" pointerEvents="none">
-                  {gn.name.length > 18 ? gn.name.slice(0, 16) + "…" : gn.name}
+                  {hubNode.name.length > 22 ? hubNode.name.slice(0, 20) + "…" : hubNode.name}
                 </text>
-                <text x={pos.x} y={pos.y + 34} textAnchor="middle" fontSize="6" fontWeight="400" fill="#BBB" letterSpacing="1.5" pointerEvents="none">GOAL</text>
+                <text x={pos.x} y={pos.y + r + 12} textAnchor="middle" fontSize={isHovered ? 11 : 8} fontWeight="500" fill="#777" pointerEvents="none">
+                  {!isExpanded ? "click to expand" : ""}
+                </text>
               </g>
             );
           })()}
 
           {/* Task nodes (only visible if their cluster is expanded or they have no cluster) */}
           {storeNodes
-            .filter((n) => !isStructuralNode(n) && !isGoalNode(n) && !hiddenNodeIds.has(n.id))
+            .filter((n) => !isStructuralNode(n) && n.id !== hubNodeId && !hiddenNodeIds.has(n.id))
             .map((node) => {
               const pos = posMap.get(node.id);
               if (!pos) return null;
