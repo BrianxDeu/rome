@@ -2,6 +2,16 @@
 
 All notable changes to Rome will be documented in this file.
 
+## [0.5.3.0] - 2026-04-10
+
+Closes the PKCE bypass found by the rome-auth-auditor droid: POST /oauth/authorize accepted auth codes without proof-of-possession, and non-S256 challenge methods silently skipped verification.
+
+### Fixed
+- **PKCE enforced on POST /oauth/authorize** — direct POST requests (bypassing the login form) must now include `code_challenge` with method `S256`. Previously only the GET handler enforced this, leaving a bypass path for auth code interception
+- **Reject non-S256 PKCE methods** — `code_challenge_method=plain` or any value other than `S256` is now rejected at both GET and POST authorize endpoints. Previously, non-S256 methods stored a challenge that the token endpoint never verified
+- **Service user fallback removed** — token exchange no longer silently falls back to `mcp-service-user-00000000` when userId is missing from the auth code. Returns an explicit 400 error instead
+- **HTML-escape OAuth error messages** — `renderAuthorizeForm` now escapes `&`, `<`, `>`, `"` in error strings to prevent future XSS if error messages ever include user-controlled input
+
 ## [0.5.2.1] - 2026-04-10
 
 Graph view overhaul: the center node is now the workstream with the most activity (HALO + Orcrist MVP), not a hardcoded OBJ1. All five OBJ workstreams are now visible. Closing a workstream collapses everything inside it. Empty workstreams show at full size.

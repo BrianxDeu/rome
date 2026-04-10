@@ -112,6 +112,7 @@ describe("POST /oauth/authorize", () => {
   it("returns form with error when password is wrong", async () => {
     await createTestUser(ctx.db, { username: "alice", password: "password123" });
     const clientId = await registerClient(ctx.app);
+    const { challenge } = makePkce();
 
     const res = await request(ctx.app)
       .post("/oauth/authorize")
@@ -119,6 +120,8 @@ describe("POST /oauth/authorize", () => {
       .send({
         client_id: encodeURIComponent(clientId),
         redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        code_challenge: encodeURIComponent(challenge),
+        code_challenge_method: encodeURIComponent("S256"),
         username: "alice",
         password: "wrongpassword",
       });
@@ -129,7 +132,8 @@ describe("POST /oauth/authorize", () => {
     expect(res.text.toLowerCase()).toMatch(/invalid|error/);
   });
 
-  it("returns form with error when user does not exist", async () => {
+  it("returns 400 when code_challenge is missing (PKCE required)", async () => {
+    const user = await createTestUser(ctx.db, { username: "alice", password: "password123" });
     const clientId = await registerClient(ctx.app);
 
     const res = await request(ctx.app)
@@ -138,6 +142,70 @@ describe("POST /oauth/authorize", () => {
       .send({
         client_id: encodeURIComponent(clientId),
         redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        username: user.username,
+        password: "password123",
+        // No code_challenge or code_challenge_method — must be rejected
+      });
+
+    // Should NOT redirect — PKCE is required for public clients
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/code_challenge/i);
+  });
+
+  it("rejects code_challenge_method other than S256", async () => {
+    const user = await createTestUser(ctx.db, { username: "alice", password: "password123" });
+    const clientId = await registerClient(ctx.app);
+
+    const res = await request(ctx.app)
+      .post("/oauth/authorize")
+      .type("form")
+      .send({
+        client_id: encodeURIComponent(clientId),
+        redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        code_challenge: encodeURIComponent("fakechallenge"),
+        code_challenge_method: encodeURIComponent("plain"),
+        username: user.username,
+        password: "password123",
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/S256/i);
+  });
+
+  it("escapes HTML in error messages to prevent XSS", async () => {
+    await createTestUser(ctx.db, { username: "alice", password: "password123" });
+    const clientId = await registerClient(ctx.app);
+    const { challenge } = makePkce();
+
+    const res = await request(ctx.app)
+      .post("/oauth/authorize")
+      .type("form")
+      .send({
+        client_id: encodeURIComponent(clientId),
+        redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        code_challenge: encodeURIComponent(challenge),
+        code_challenge_method: encodeURIComponent("S256"),
+        username: "alice",
+        password: "wrongpassword",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Invalid username or password.");
+    expect(res.text).not.toContain("<script>");
+  });
+
+  it("returns form with error when user does not exist", async () => {
+    const clientId = await registerClient(ctx.app);
+    const { challenge } = makePkce();
+
+    const res = await request(ctx.app)
+      .post("/oauth/authorize")
+      .type("form")
+      .send({
+        client_id: encodeURIComponent(clientId),
+        redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        code_challenge: encodeURIComponent(challenge),
+        code_challenge_method: encodeURIComponent("S256"),
         username: "nobody",
         password: "password123",
       });
@@ -191,6 +259,39 @@ describe("POST /oauth/token — authenticated flow", () => {
     const payload = JSON.parse(Buffer.from(tokenRes.body.access_token.split(".")[1], "base64url").toString());
     expect(payload.userId).toBe(user.id);
     expect(payload.userId).not.toBe("mcp-service-user-00000000");
+  });
+
+  it("token exchange carries the real userId (not the service account fallback)", async () => {
+    const clientId = await registerClient(ctx.app);
+    const { verifier, challenge } = makePkce();
+
+    // Full flow to verify tokens carry the real user's ID
+    const user = await createTestUser(ctx.db, { username: "bob", password: "pass123" });
+    const authRes = await request(ctx.app)
+      .post("/oauth/authorize")
+      .type("form")
+      .send({
+        client_id: encodeURIComponent(clientId),
+        redirect_uri: encodeURIComponent("https://claude.ai/callback"),
+        state: encodeURIComponent("test"),
+        code_challenge: encodeURIComponent(challenge),
+        code_challenge_method: encodeURIComponent("S256"),
+        username: user.username,
+        password: "pass123",
+      });
+
+    const code = new URL(authRes.headers["location"]).searchParams.get("code");
+    const tokenRes = await request(ctx.app)
+      .post("/oauth/token")
+      .type("form")
+      .send({ grant_type: "authorization_code", code, code_verifier: verifier });
+
+    expect(tokenRes.status).toBe(200);
+    // Decode the JWT and verify it has the REAL user's ID, not the service account
+    const jwt = await import("jsonwebtoken");
+    const decoded = jwt.default.decode(tokenRes.body.access_token) as any;
+    expect(decoded.userId).toBe(user.id);
+    expect(decoded.userId).not.toBe("mcp-service-user-00000000");
   });
 });
 

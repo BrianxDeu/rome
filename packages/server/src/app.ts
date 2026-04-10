@@ -99,6 +99,11 @@ export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
     return true;
   }
 
+  // Escape HTML to prevent XSS in error messages
+  function escapeHtml(str: string): string {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
   // HTML login form for OAuth authorization
   function renderAuthorizeForm(params: {
     client_id: string;
@@ -109,7 +114,7 @@ export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
     error?: string;
   }): string {
     const errorHtml = params.error
-      ? `<div style="background:#fee;border:1px solid #c00;border-radius:6px;padding:10px 14px;margin-bottom:16px;color:#c00;font-size:14px;">${params.error}</div>`
+      ? `<div style="background:#fee;border:1px solid #c00;border-radius:6px;padding:10px 14px;margin-bottom:16px;color:#c00;font-size:14px;">${escapeHtml(params.error)}</div>`
       : "";
     const hidden = (name: string, value: string | undefined) =>
       value ? `<input type="hidden" name="${name}" value="${encodeURIComponent(value)}">` : "";
@@ -161,10 +166,10 @@ export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
       return;
     }
 
-    // Require PKCE — public clients have no client_secret, so code_challenge is the
+    // Require PKCE S256 — public clients have no client_secret, so code_challenge is the
     // sole proof-of-possession. Without it an intercepted auth code can be exchanged freely.
-    if (!code_challenge || !code_challenge_method) {
-      res.status(400).json({ error: "code_challenge and code_challenge_method are required" });
+    if (!code_challenge || code_challenge_method !== "S256") {
+      res.status(400).json({ error: "code_challenge with code_challenge_method S256 is required" });
       return;
     }
 
@@ -191,6 +196,13 @@ export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
     const { username, password } = req.body;
 
     if (!validateClientAndRedirectUri(client_id, redirect_uri, res)) {
+      return;
+    }
+
+    // Require PKCE S256 on POST too — same check as the GET handler.
+    // A direct POST bypassing the form could omit code_challenge otherwise.
+    if (!code_challenge || code_challenge_method !== "S256") {
+      res.status(400).json({ error: "code_challenge with code_challenge_method S256 is required" });
       return;
     }
 
@@ -343,7 +355,11 @@ export function createApp(db: Db, sqlite?: BetterSqlite3.Database) {
       }
     }
 
-    const tokenUserId = stored.userId || "mcp-service-user-00000000";
+    if (!stored.userId) {
+      res.status(400).json({ error: "invalid_grant", error_description: "Auth code missing userId — this should not happen" });
+      return;
+    }
+    const tokenUserId = stored.userId;
 
     // Generate access token (7 days)
     const accessToken = jwt.sign(
